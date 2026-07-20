@@ -2,6 +2,7 @@
 
 import { FC } from "react";
 import Link from "next/link";
+import { ThemeToggle } from "./ThemeToggle";
 
 const navItems = ["Converter", "Charts", "Rate alerts", "Send money", "News"];
 
@@ -69,6 +70,7 @@ export const Header: FC = () => {
           >
             Login
           </a>
+          <ThemeToggle />
         </div>
       </div>
     </header>

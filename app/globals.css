@@ -18,6 +18,24 @@
   --warning: #f0b90b;
 }
 
+html[data-theme="light"] {
+  --bg: #f6f8fa;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --surface-3: #e5e7eb;
+  --border: #d0d7de;
+  --border-strong: #c4cdd5;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --text-dim: #8b949e;
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-soft: rgba(37, 99, 235, 0.1);
+  --up: #16a34a;
+  --down: #dc2626;
+  --warning: #d97706;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
