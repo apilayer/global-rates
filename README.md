@@ -10,9 +10,9 @@ It's a rate-checking tool, not a money-transfer service: the mid-market rate sho
 
 Everything runs on APILayer APIs, proxied through server routes in `app/api/` so keys stay off the client:
 
-- **Exchange Rates Data API** — real-time and historical FX for the converter, the conversion tables, the candlestick chart (via `timeseries`) and the popular-pairs moves (via `fluctuation`).
-- **Mediastack** — the financial news section, keyword-filtered to the selected currency pair and cached so it stays within the request quota.
-- **ipstack** — geolocates the visitor on first load to choose the default local currency (USD stays the anchor; nothing is hardcoded).
+- **[Exchange Rates Data API](https://exchangeratesapi.io/)** — real-time and historical FX for the converter, the conversion tables, the candlestick chart (via `timeseries`) and the popular-pairs moves (via `fluctuation`).
+- **[Mediastack](https://mediastack.com/)** — the financial news section, keyword-filtered to the selected currency pair and cached so it stays within the request quota.
+- **[ipstack](https://ipstack.com/)** — geolocates the visitor on first load to choose the default local currency (USD stays the anchor; nothing is hardcoded).
 
 ## Getting started
 
