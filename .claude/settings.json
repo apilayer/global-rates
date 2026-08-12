@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.sendwave.com)",
+      "Bash(pkill -9 -f \"next-server\")",
+      "Bash(pkill -9 -f \"next dev\")",
+      "Bash(pkill -9 -f \"next/dist/bin/next\")",
+      "Bash(lsof -iTCP:3000 -sTCP:LISTEN -P)",
+      "Bash(awk 'NR>1{print $1,$2}')"
+    ]
+  }
+}

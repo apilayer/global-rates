@@ -1,135 +1,251 @@
 "use client";
 
-import { FC } from "react";
+import { FC, useEffect, useState } from "react";
+import { DEFAULT_FROM, DEFAULT_TO } from "@/lib/constants";
 
-interface INewsItem {
+interface INewsArticle {
   id: string;
   category: string;
+  source: string;
   title: string;
   summary: string;
   time: string;
-  trending?: boolean;
+  image: string | null;
+  url: string;
 }
 
-const news: INewsItem[] = [
-  {
-    id: "1",
-    category: "Markets",
-    title: "Fed signals slower rate cuts as inflation lingers",
-    summary: "The latest FOMC minutes point to a cautious approach, sending the dollar higher against emerging-market currencies.",
-    time: "2h ago",
-    trending: true,
-  },
-  {
-    id: "2",
-    category: "Emerging Markets",
-    title: "Cedi steadies after central bank intervention",
-    summary: "The Bank of Ghana's FX auction helped calm volatility, with the GHS holding near recent levels against the US dollar.",
-    time: "4h ago",
-  },
-  {
-    id: "3",
-    category: "Crypto",
-    title: "Bitcoin whipsaws around $110k as ETFs see outflows",
-    summary: "Digital assets remain correlated with risk sentiment as macro traders reposition for the second half of the year.",
-    time: "6h ago",
-  },
-  {
-    id: "4",
-    category: "Commodities",
-    title: "Gold slips from record highs on profit-taking",
-    summary: "Bullion retreats after touching new all-time peaks, while oil prices hold steady ahead of inventory data.",
-    time: "8h ago",
-  },
-  {
-    id: "5",
-    category: "Policy",
-    title: "ECB poised to cut rates as growth slows",
-    summary: "Euro-area PMI weakness is fueling expectations for another quarter-point reduction at the next meeting.",
-    time: "10h ago",
-  },
-  {
-    id: "6",
-    category: "Africa",
-    title: "Naira pressures persist despite FX reforms",
-    summary: "Nigeria's parallel market remains wide as authorities balance liquidity support with exchange-rate flexibility.",
-    time: "12h ago",
-  },
+interface INewsSectionProps {
+  from?: string;
+  to?: string;
+}
+
+const THUMB_GRADIENTS: [string, string][] = [
+  ["#1e3a8a", "#0ea5e9"],
+  ["#166534", "#22c55e"],
+  ["#7c2d12", "#f59e0b"],
+  ["#713f12", "#eab308"],
+  ["#1e40af", "#6366f1"],
+  ["#134e4a", "#14b8a6"],
 ];
 
-export const NewsSection: FC = () => {
-  const featured = news[0];
-  const rest = news.slice(1);
+/** Article thumbnail: real image when available, finance-motif gradient otherwise. */
+function ArticleThumb({
+  image,
+  index,
+  className,
+}: {
+  image: string | null;
+  index: number;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const colors = THUMB_GRADIENTS[index % THUMB_GRADIENTS.length];
+
+  if (image && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={image}
+        alt=""
+        loading="lazy"
+        onError={() => setFailed(true)}
+        className={`shrink-0 bg-(--color-surface-2) object-cover ${className ?? ""}`}
+      />
+    );
+  }
 
   return (
-    <section className="w-full">
+    <div
+      className={`relative shrink-0 overflow-hidden ${className ?? ""}`}
+      style={{ background: `linear-gradient(135deg, ${colors[0]}, ${colors[1]})` }}
+      aria-hidden="true"
+    >
+      <svg
+        className="absolute inset-0 h-full w-full text-white/25"
+        viewBox="0 0 120 80"
+        fill="none"
+        preserveAspectRatio="none"
+      >
+        <path
+          d="M0 60 L20 50 L38 56 L56 34 L78 44 L98 22 L120 30"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+      </svg>
+    </div>
+  );
+}
+
+export const NewsSection: FC<INewsSectionProps> = ({
+  from = DEFAULT_FROM,
+  to = DEFAULT_TO,
+}) => {
+  const [articles, setArticles] = useState<INewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/news?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+      .then((res) => res.json())
+      .then((data: { articles?: INewsArticle[]; error?: string }) => {
+        if (!active) return;
+        setArticles(Array.isArray(data.articles) ? data.articles : []);
+        if (data.error) setError(data.error);
+      })
+      .catch(() => {
+        if (active) setError("Could not load news right now.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [from, to]);
+
+  const featured = articles[0];
+  const rest = articles.slice(1, 6);
+
+  return (
+    <section id="news" className="w-full scroll-mt-28">
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
-        <div className="mb-4 flex items-end justify-between gap-3">
+        <div className="mb-4 flex items-end justify-between gap-3 border-b border-(--color-border) pb-3">
           <div>
-            <h2 className="text-xl font-semibold text-(--color-text)">Market news</h2>
+            <h2 className="text-xl font-semibold text-(--color-text)">
+              Financial news
+            </h2>
             <p className="text-sm text-(--color-text-muted)">
-              Headlines moving currencies and markets right now.
+              Top stories for {from} &amp; {to} — currencies, rates and markets.
             </p>
           </div>
-          <a href="#" className="text-sm text-(--color-text-muted) transition-colors hover:text-(--color-brand)">
-            More ›
-          </a>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {/* Featured story */}
           <a
-            href="#"
-            className="group relative flex flex-col justify-end overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface) p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:shadow-md hover:shadow-(--color-brand)/5 lg:col-span-2 lg:min-h-[280px]"
+            href="#news"
+            className="text-sm text-(--color-text-muted) transition-colors hover:text-(--color-brand)"
           >
-            <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-(--color-brand)/5 blur-3xl opacity-0 transition-opacity group-hover:opacity-100" />
-            <div className="absolute right-4 top-4 rounded-full bg-(--color-brand) px-2.5 py-1 text-[10px] font-bold text-white uppercase tracking-wider">
-              {featured.category}
-            </div>
-            <div>
-              <h3 className="text-xl font-semibold text-(--color-text) sm:text-2xl">
-                {featured.title}
-              </h3>
-              <p className="mt-2 max-w-xl text-sm text-(--color-text-muted)">
-                {featured.summary}
-              </p>
-              <div className="mt-4 flex items-center gap-2 text-xs text-(--color-text-dim)">
-                {featured.trending && (
-                  <span className="inline-flex items-center gap-1 text-(--color-up)">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                      <polyline points="17 6 23 6 23 12" />
-                    </svg>
-                    Trending
-                  </span>
-                )}
-                <span>{featured.time}</span>
-              </div>
-            </div>
+            More news ›
           </a>
-
-          {/* Side stories */}
-          <div className="flex flex-col gap-3">
-              {rest.slice(0, 3).map((item) => (
-                <a
-                  key={item.id}
-                  href="#"
-                  className="group flex flex-col gap-1 rounded-xl border border-(--color-border) bg-(--color-surface) p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:shadow-md hover:shadow-(--color-brand)/5"
-                >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="w-fit rounded-full bg-(--color-brand-soft) px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-(--color-brand)">
-                    {item.category}
-                  </span>
-                  <span className="text-xs text-(--color-text-dim)">{item.time}</span>
-                </div>
-                <h4 className="text-sm font-semibold text-(--color-text) line-clamp-2">
-                  {item.title}
-                </h4>
-              </a>
-            ))}
-          </div>
         </div>
+
+        {loading && articles.length === 0 ? (
+          <NewsSkeleton />
+        ) : articles.length === 0 ? (
+          <div className="rounded-xl border border-(--color-border) bg-(--color-surface) px-6 py-12 text-center">
+            <p className="text-sm text-(--color-text-muted)">
+              {error
+                ? "News is briefly unavailable — please check back soon."
+                : `No recent stories for ${from}/${to} right now.`}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
+            {/* Featured lead story */}
+            {featured && (
+              <a
+                href={featured.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex flex-col overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface) shadow-sm transition-all hover:border-(--color-brand)/30 hover:bg-(--color-surface-2)"
+              >
+                <ArticleThumb
+                  image={featured.image}
+                  index={0}
+                  className="h-52 w-full sm:h-64"
+                />
+                <div className="flex flex-col gap-2 p-5">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="font-semibold text-(--color-brand)">
+                      {featured.source}
+                    </span>
+                    {featured.time && (
+                      <>
+                        <span className="text-(--color-text-dim)">·</span>
+                        <span className="text-(--color-text-dim)">
+                          {featured.time}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-semibold leading-snug text-(--color-text) transition-colors group-hover:text-(--color-brand) sm:text-2xl">
+                    {featured.title}
+                  </h3>
+                  {featured.summary && (
+                    <p className="line-clamp-3 text-sm text-(--color-text-muted)">
+                      {featured.summary}
+                    </p>
+                  )}
+                </div>
+              </a>
+            )}
+
+            {/* Headline list */}
+            <ul className="divide-y divide-(--color-border) overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
+              {rest.map((item, i) => (
+                <li key={item.id}>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group flex items-start gap-3 p-3.5 transition-colors hover:bg-(--color-surface-2)"
+                  >
+                    <ArticleThumb
+                      image={item.image}
+                      index={i + 1}
+                      className="h-16 w-16 rounded-lg sm:h-[72px] sm:w-[72px]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <h4 className="line-clamp-2 text-sm font-semibold leading-snug text-(--color-text) transition-colors group-hover:text-(--color-brand)">
+                        {item.title}
+                      </h4>
+                      <div className="mt-1.5 flex items-center gap-2 text-xs">
+                        <span className="font-medium text-(--color-text-muted)">
+                          {item.source}
+                        </span>
+                        {item.time && (
+                          <>
+                            <span className="text-(--color-text-dim)">·</span>
+                            <span className="text-(--color-text-dim)">
+                              {item.time}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </section>
   );
 };
+
+function NewsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
+        <div className="h-52 w-full animate-pulse bg-(--color-surface-2) sm:h-64" />
+        <div className="space-y-3 p-5">
+          <div className="h-3 w-24 animate-pulse rounded bg-(--color-surface-2)" />
+          <div className="h-5 w-3/4 animate-pulse rounded bg-(--color-surface-2)" />
+          <div className="h-4 w-full animate-pulse rounded bg-(--color-surface-2)" />
+        </div>
+      </div>
+      <ul className="divide-y divide-(--color-border) overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <li key={i} className="flex items-start gap-3 p-3.5">
+            <div className="h-16 w-16 shrink-0 animate-pulse rounded-lg bg-(--color-surface-2) sm:h-[72px] sm:w-[72px]" />
+            <div className="flex-1 space-y-2 pt-1">
+              <div className="h-4 w-full animate-pulse rounded bg-(--color-surface-2)" />
+              <div className="h-3 w-20 animate-pulse rounded bg-(--color-surface-2)" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

@@ -1,37 +1,47 @@
 "use client";
 
-import { FC } from "react";
+import { FC, useEffect, useState } from "react";
 import { CURRENCIES, POPULAR_PAIRS } from "@/lib/constants";
 import { formatNumber } from "@/lib/utils";
 
 interface ILiveCurrencyChartsProps {
   from: string;
+  activeTo?: string;
+  onSelectPair?: (from: string, to: string) => void;
 }
 
-const mockRates: Record<string, number> = {
-  USD: 1,
-  EUR: 0.8764,
-  GBP: 0.7451,
-  JPY: 162.56,
-  CAD: 1.406,
-  AUD: 1.428,
-  CHF: 0.8102,
-  CNY: 6.7717,
-  ZAR: 16.515,
-};
+interface IFluctuation {
+  rate: number;
+  changePct: number;
+  up: boolean;
+}
 
-const mockChanges: Record<string, { value: number; pct: number; up: boolean }> = {
-  EUR: { value: -0.0005, pct: 0.06, up: false },
-  GBP: { value: -0.0022, pct: 0.29, up: false },
-  JPY: { value: 0.2485, pct: 0.15, up: true },
-  CAD: { value: -0.0081, pct: 0.57, up: false },
-  AUD: { value: -0.0141, pct: 0.98, up: false },
-  CHF: { value: -0.002, pct: 0.25, up: false },
-  CNY: { value: -0.0081, pct: 0.12, up: false },
-  ZAR: { value: 0.1165, pct: 0.71, up: true },
-};
+export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({
+  from,
+  activeTo,
+  onSelectPair,
+}) => {
+  const pairs = POPULAR_PAIRS.filter((p) => p.to !== from);
+  const [data, setData] = useState<Record<string, IFluctuation>>({});
 
-export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({ from }) => {
+  // Real mid-market rates + weekly moves from the fluctuation endpoint.
+  useEffect(() => {
+    let active = true;
+    const symbols = pairs.map((p) => p.to).join(",");
+    fetch(`/api/fluctuation?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(symbols)}`)
+      .then((r) => r.json())
+      .then((d: { rates?: Record<string, IFluctuation> }) => {
+        if (active && d.rates) setData(d.rates);
+      })
+      .catch(() => {
+        /* leave cards in their loading state */
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from]);
+
   return (
     <section className="w-full">
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
@@ -44,21 +54,27 @@ export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({ from }) => {
               Mid-market rates and weekly moves for popular currency pairs.
             </p>
           </div>
-          <a href="#" className="hidden text-sm text-(--color-text-muted) transition-colors hover:text-(--color-brand) sm:inline">
+          <a href="#charts" className="hidden text-sm text-(--color-text-muted) transition-colors hover:text-(--color-brand) sm:inline">
             View all ›
           </a>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {POPULAR_PAIRS.filter((p) => p.to !== from).map((pair) => {
+          {pairs.map((pair) => {
             const meta = CURRENCIES[pair.to];
-            const rate = mockRates[pair.to] ?? 0;
-            const change = mockChanges[pair.to] ?? { value: 0, pct: 0, up: true };
+            const entry = data[pair.to];
+            const isActive = activeTo === pair.to;
             return (
-              <a
+              <button
                 key={pair.to}
-                href="#"
-                className="group relative flex flex-col gap-3 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface) p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:shadow-md hover:shadow-(--color-brand)/5"
+                type="button"
+                onClick={() => onSelectPair?.(from, pair.to)}
+                aria-pressed={isActive}
+                className={`group relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-(--color-surface) p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:shadow-md hover:shadow-(--color-brand)/5 ${
+                  isActive
+                    ? "border-(--color-brand) ring-1 ring-(--color-brand)/40"
+                    : "border-(--color-border)"
+                }`}
               >
                 <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-(--color-brand)/5 blur-2xl opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="flex items-center gap-2">
@@ -69,14 +85,26 @@ export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({ from }) => {
                 </div>
                 <p className="text-sm text-(--color-text-muted)">1 {from} equals</p>
                 <p className="text-xl font-semibold text-(--color-text) sm:text-2xl">
-                  {formatNumber(rate, { minimumFractionDigits: 3, maximumFractionDigits: 6 })} {pair.to}
+                  {entry ? (
+                    <>
+                      {formatNumber(entry.rate, { minimumFractionDigits: 3, maximumFractionDigits: 6 })} {pair.to}
+                    </>
+                  ) : (
+                    <span className="inline-block h-6 w-24 animate-pulse rounded bg-(--color-surface-2) align-middle" />
+                  )}
                 </p>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm text-(--color-text-muted)">
-                    <span className={change.up ? "text-(--color-up)" : "text-(--color-down)"}>
-                      {change.up ? "▲" : "▼"} {Math.abs(change.pct).toFixed(2)}%
-                    </span>{" "}
-                    Weekly
+                    {entry ? (
+                      <>
+                        <span className={entry.up ? "text-(--color-up)" : "text-(--color-down)"}>
+                          {entry.up ? "▲" : "▼"} {Math.abs(entry.changePct).toFixed(2)}%
+                        </span>{" "}
+                        Weekly
+                      </>
+                    ) : (
+                      <span className="text-(--color-text-dim)">Weekly</span>
+                    )}
                   </p>
                   <span className="group flex items-center text-sm font-semibold text-(--color-brand)">
                     Chart
@@ -91,7 +119,7 @@ export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({ from }) => {
                     </svg>
                   </span>
                 </div>
-              </a>
+              </button>
             );
           })}
         </div>

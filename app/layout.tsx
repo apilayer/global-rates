@@ -25,9 +25,21 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-theme="dark"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-(--color-bg) text-(--color-text) antialiased" data-theme="dark">{children}</body>
+      <head>
+        {/* Apply the saved theme before first paint to avoid a flash.
+            Dark is the default; the OS preference is intentionally ignored
+            so the dashboard is dark-first. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem("globalrates-theme");document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark")}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className="flex min-h-full flex-col bg-(--color-bg) text-(--color-text) antialiased">{children}</body>
     </html>
   );
 }

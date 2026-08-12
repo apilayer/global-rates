@@ -7,9 +7,11 @@ export const ThemeToggle: FC = () => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = document.documentElement.getAttribute("data-theme") as "dark" | "light" | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial = stored ?? (prefersDark ? "dark" : "light");
+    // The pre-paint script in the document head has already applied the
+    // saved preference (defaulting to dark) to <html>. Read it back so the
+    // toggle's own state matches what's on screen.
+    const applied = document.documentElement.getAttribute("data-theme");
+    const initial: "dark" | "light" = applied === "light" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", initial);
 
     const timeout = setTimeout(() => {

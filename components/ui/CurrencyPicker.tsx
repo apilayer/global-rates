@@ -61,17 +61,11 @@ export const CurrencyPicker: FC<ICurrencyPickerProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex min-w-[120px] max-w-[50%] shrink-0 items-center justify-between gap-1 text-base font-semibold text-(--color-text) md:text-lg"
+        title={selected.name}
+        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap text-base font-semibold text-(--color-text) md:text-lg"
       >
-        <div className="flex min-w-0 flex-1 items-center">
-          <span className="mr-2 text-lg">{selected.flag}</span>
-          <span className="inline-block min-w-[50px] truncate text-left">
-            {value}
-            <span className="hidden text-(--color-text-muted) md:inline">
-              {" "}- {selected.name}
-            </span>
-          </span>
-        </div>
+        <span className="text-lg">{selected.flag}</span>
+        <span>{value}</span>
         <svg
           className={cn(
             "h-4 min-w-4 w-4 text-(--color-text-muted) transition-transform",

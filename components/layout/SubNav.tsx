@@ -3,11 +3,10 @@
 import { FC } from "react";
 
 const items = [
-  { label: "Overview", active: true, href: "#" },
-  { label: "Converter", active: false, href: "#" },
-  { label: "Charts", active: false, href: "#" },
-  { label: "Rate alerts", active: false, href: "#" },
-  { label: "News", active: false, href: "#" },
+  { label: "Overview", active: true, href: "#top" },
+  { label: "Converter", active: false, href: "#converter" },
+  { label: "Charts", active: false, href: "#charts" },
+  { label: "News", active: false, href: "#news" },
 ];
 
 export const SubNav: FC = () => {

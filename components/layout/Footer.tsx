@@ -9,12 +9,12 @@ export const Footer: FC = () => {
       <div className="mx-auto flex max-w-[1400px] flex-col gap-10 px-4 pt-10 sm:px-6">
         <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
           <div>
-            <p className="mb-4 text-sm font-semibold text-(--color-text)">Transfer Money</p>
+            <p className="mb-4 text-sm font-semibold text-(--color-text)">Rates</p>
             <ul className="flex flex-col gap-2 text-xs text-(--color-text-muted)">
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Send Money Online</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Large Money Transfer</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Transfer Fees</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Security</a></li>
+              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Live Exchange Rates</a></li>
+              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Popular Currency Pairs</a></li>
+              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Historical Rates</a></li>
+              <li><a href="#news" className="transition-colors hover:text-(--color-brand)">Market News</a></li>
             </ul>
           </div>
           <div>
@@ -38,9 +38,9 @@ export const Footer: FC = () => {
           <div>
             <p className="mb-4 text-sm font-semibold text-(--color-text)">API</p>
             <ul className="flex flex-col gap-2 text-xs text-(--color-text-muted)">
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Currency Data API</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Documentation</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Partnerships</a></li>
+              <li><a href="https://apilayer.com/marketplace/exchangerates_data-api" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-(--color-brand)">Exchange Rates Data API</a></li>
+              <li><a href="https://apilayer.com/marketplace/exchangerates_data-api" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-(--color-brand)">API Documentation</a></li>
+              <li><a href="https://apilayer.com/marketplace/exchangerates_data-api" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-(--color-brand)">Get a free API key</a></li>
             </ul>
           </div>
         </div>
@@ -50,7 +50,7 @@ export const Footer: FC = () => {
             Global<span className="text-(--color-brand)">Rates</span>.io
           </span>
           <small className="text-center text-xs text-(--color-text-dim)">
-            © {new Date().getFullYear()} GlobalRates.io — Powered by Exchangerates API
+            © {new Date().getFullYear()} GlobalRates.io — a demo showcasing the Exchange Rates Data API by APILayer
           </small>
         </div>
       </div>

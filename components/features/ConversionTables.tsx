@@ -8,9 +8,16 @@ interface IConversionTablesProps {
   from: string;
   to: string;
   rate: number;
+  /** Load a chosen amount (in the "from" currency) into the converter. */
+  onSelectAmount?: (amount: number) => void;
 }
 
-export const ConversionTables: FC<IConversionTablesProps> = ({ from, to, rate }) => {
+export const ConversionTables: FC<IConversionTablesProps> = ({
+  from,
+  to,
+  rate,
+  onSelectAmount,
+}) => {
   const fromMeta = CURRENCIES[from];
   const toMeta = CURRENCIES[to];
 
@@ -34,6 +41,7 @@ export const ConversionTables: FC<IConversionTablesProps> = ({ from, to, rate })
             toName={toMeta?.name ?? to}
             rate={rate}
             amounts={CONVERTER_TABLE_AMOUNTS}
+            onSelectAmount={onSelectAmount}
           />
           <TableBlock
             from={to}
@@ -56,6 +64,7 @@ interface ITableBlockProps {
   toName: string;
   rate: number;
   amounts: number[];
+  onSelectAmount?: (amount: number) => void;
 }
 
 const TableBlock: FC<ITableBlockProps> = ({
@@ -65,6 +74,7 @@ const TableBlock: FC<ITableBlockProps> = ({
   toName,
   rate,
   amounts,
+  onSelectAmount,
 }) => {
   return (
     <div className="rounded-xl border border-(--color-border) bg-(--color-surface) p-3 shadow-sm">
@@ -90,12 +100,19 @@ const TableBlock: FC<ITableBlockProps> = ({
             {amounts.map((amount) => (
               <tr key={amount} className="group transition-colors hover:bg-(--color-surface-2)/50">
                 <td className="px-4 py-2.5 text-left">
-                  <a
-                    href="#"
-                    className="font-medium text-(--color-brand) hover:underline"
-                  >
-                    {formatNumber(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {from}
-                  </a>
+                  {onSelectAmount ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectAmount(amount)}
+                      className="font-medium text-(--color-brand) hover:underline"
+                    >
+                      {formatNumber(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {from}
+                    </button>
+                  ) : (
+                    <span className="font-medium text-(--color-text)">
+                      {formatNumber(amount, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {from}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular font-medium text-(--color-text-muted)">
                   {formatNumber(amount * rate, { minimumFractionDigits: 3, maximumFractionDigits: 6 })} {to}

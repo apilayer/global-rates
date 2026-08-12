@@ -5,27 +5,22 @@ import { IConvertResult } from "@/interfaces/currency.interface";
 import { currencyService } from "@/services/currency.service";
 
 interface IUseCurrencyConverterReturn {
-  amount: string;
-  setAmount: (value: string) => void;
-  fromCurrency: string;
-  setFromCurrency: (code: string) => void;
-  toCurrency: string;
-  setToCurrency: (code: string) => void;
   result: number | null;
   rate: number | null;
   loading: boolean;
   error: string | null;
-  swapCurrencies: () => void;
 }
 
+/**
+ * Controlled converter: `from`, `to` and `amount` are owned by the caller so
+ * the pair can be driven from anywhere on the page (converter pickers, popular
+ * pair cards, etc.). Returns the debounced conversion result and rate.
+ */
 export function useCurrencyConverter(
-  defaultAmount = "1",
-  defaultFrom = "USD",
-  defaultTo = "GHS"
+  from: string,
+  to: string,
+  amount: string
 ): IUseCurrencyConverterReturn {
-  const [amount, setAmount] = useState(defaultAmount);
-  const [fromCurrency, setFromCurrency] = useState(defaultFrom);
-  const [toCurrency, setToCurrency] = useState(defaultTo);
   const [result, setResult] = useState<number | null>(null);
   const [rate, setRate] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,13 +34,12 @@ export function useCurrencyConverter(
       return;
     }
 
-    if (fromCurrency === toCurrency) {
+    if (from === to) {
       setResult(Number(amount));
       setRate(1);
       return;
     }
 
-    // Cancel any in-flight request
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
 
@@ -54,25 +48,25 @@ export function useCurrencyConverter(
 
     try {
       const data: IConvertResult = await currencyService.convert(
-        fromCurrency,
-        toCurrency,
+        from,
+        to,
         amount
       );
       setResult(data.result);
       setRate(data.info.rate);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") {
-        return; // Ignore aborted requests
+        return;
       }
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
-  }, [amount, fromCurrency, toCurrency]);
+  }, [amount, from, to]);
 
   // Debounced auto-conversion
   useEffect(() => {
-    const timer = setTimeout(convert, 500);
+    const timer = setTimeout(convert, 400);
     return () => clearTimeout(timer);
   }, [convert]);
 
@@ -83,22 +77,5 @@ export function useCurrencyConverter(
     };
   }, []);
 
-  const swapCurrencies = useCallback(() => {
-    setFromCurrency(toCurrency);
-    setToCurrency(fromCurrency);
-  }, [fromCurrency, toCurrency]);
-
-  return {
-    amount,
-    setAmount,
-    fromCurrency,
-    setFromCurrency,
-    toCurrency,
-    setToCurrency,
-    result,
-    rate,
-    loading,
-    error,
-    swapCurrencies,
-  };
+  return { result, rate, loading, error };
 }
