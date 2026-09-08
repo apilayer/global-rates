@@ -9,32 +9,32 @@ interface IFaq {
 
 const faqs: IFaq[] = [
   {
-    q: "What is the mid-market rate?",
-    a: "The mid-market rate (or interbank rate) is the midpoint between the buy and sell prices of two currencies on the global market. It's the fairest, most transparent rate to reference — the same one banks and businesses use to trade with each other. It's shown here for informational purposes.",
+    q: "What is GlobalRates?",
+    a: "GlobalRates is a free currency converter and exchange rate tool for checking current rates between global currencies. You can convert currencies, compare popular currency pairs, and explore exchange rate charts. GlobalRates is powered by Exchangerates API, giving developers access to the exchange rate data behind the tool.",
   },
   {
-    q: "Where do the exchange rates come from?",
-    a: "Rates are powered by the Exchange Rates Data API by APILayer, which aggregates real-time and historical foreign-exchange data for 170+ world currencies. The converter, the rate tables and the chart all read from the same live source.",
+    q: "What is the data source for GlobalRates?",
+    a: "GlobalRates is powered by Exchangerates API from APILayer. The currency converter, exchange rate tables, and charts use exchange rate data provided by the API. Developers can access this data programmatically through Exchangerates API to add currency conversion and foreign exchange data to their own applications.",
   },
   {
-    q: "How often are the rates updated?",
-    a: "The mid-market rates refresh in real time as the markets move. Every conversion you run and every pair you open pulls the latest available rate rather than a cached snapshot.",
+    q: "What is a currency exchange rate?",
+    a: "A currency exchange rate represents how much one currency is worth in another currency. For example, a USD/EUR exchange rate shows the value of one US dollar in euros. GlobalRates lets you quickly check exchange rates and convert amounts between currencies using the latest available data.",
   },
   {
-    q: "How is my starting currency chosen?",
-    a: "On your first visit we detect your country from your IP address (via ipstack) and default the comparison to your local currency against the US Dollar. Nothing is hardcoded — and once you pick a currency yourself, we remember your choice instead.",
+    q: "What is Exchangerates API?",
+    a: "Exchangerates API is a REST API that provides real-time and historical foreign exchange rates and currency conversion data. Developers can use it to access exchange rates for hundreds of currencies and integrate currency data directly into websites, apps, financial platforms, and other software.",
   },
   {
-    q: "Can I use these rates to send money?",
-    a: "GlobalRates is a rate-checking tool, not a money-transfer service. The mid-market rate is great for understanding what a currency is really worth, but providers add a margin, so it's not the rate you'd receive when actually sending money.",
+    q: "How can I get exchange rates using an API?",
+    a: "You can use Exchangerates API to retrieve exchange rate data programmatically through REST API requests. Depending on your use case and plan, you can access current rates, convert currencies, retrieve historical exchange rates, and work with time-series and currency fluctuation data.",
   },
   {
-    q: "Do you have historical rates and charts?",
-    a: "Yes. The chart shows the pair's movement over the past 12 months, and the underlying API also supports historical lookups and fluctuation data for any date range.",
+    q: "Can I get historical exchange rates with Exchangerates API?",
+    a: "Yes. Exchangerates API supports historical exchange rate data, allowing developers to retrieve rates for previous dates. Historical FX data can be useful for financial reporting, accounting, analytics, price comparisons, currency trend analysis, and applications that need to understand how exchange rates have changed over time.",
   },
   {
-    q: "Is there an API I can build with?",
-    a: "Absolutely — this whole site is a demo of the Exchange Rates Data API by APILayer. You can get a free API key and access the same live and historical FX data that powers GlobalRates.",
+    q: "What can I build with Exchangerates API?",
+    a: "Exchangerates API can be used to build currency converters, financial dashboards, international pricing tools, accounting software, travel apps, e-commerce platforms, analytics tools, and other applications that need exchange rate data. It provides structured currency data that developers can integrate directly into their products.",
   },
 ];
 

@@ -20,10 +20,10 @@ export const Footer: FC = () => {
           <div>
             <p className="mb-4 text-sm font-semibold text-(--color-text)">Tools</p>
             <ul className="flex flex-col gap-2 text-xs text-(--color-text-muted)">
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Currency Converter</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Currency Charts</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Rate Alerts</a></li>
-              <li><a href="#" className="transition-colors hover:text-(--color-brand)">Historical Rates</a></li>
+              <li><a href="/#converter" className="transition-colors hover:text-(--color-brand)">Currency Converter</a></li>
+              <li><a href="/#charts" className="transition-colors hover:text-(--color-brand)">Currency Charts</a></li>
+              <li><a href="/compare" className="transition-colors hover:text-(--color-brand)">Rate Comparison</a></li>
+              <li><a href="/#faq" className="transition-colors hover:text-(--color-brand)">FAQ</a></li>
             </ul>
           </div>
           <div>

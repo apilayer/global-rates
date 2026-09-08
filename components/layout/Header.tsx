@@ -6,9 +6,10 @@ import { ThemeToggle } from "./ThemeToggle";
 import { ApiLayerLogo } from "@/components/ui/ApiLayerLogo";
 
 const navItems: { label: string; href: string; external?: boolean }[] = [
-  { label: "Converter", href: "#converter" },
-  { label: "Charts", href: "#charts" },
-  { label: "News", href: "#news" },
+  { label: "Converter", href: "/#converter" },
+  { label: "Charts", href: "/#charts" },
+  { label: "Compare", href: "/compare" },
+  { label: "News", href: "/#news" },
   {
     label: "API",
     href: "https://apilayer.com/marketplace/exchangerates_data-api",
@@ -48,18 +49,27 @@ export const Header: FC = () => {
 
         {/* Desktop Nav */}
         <nav className="hidden items-center gap-1 text-sm md:flex" aria-label="Main">
-          {navItems.map((item) => (
-            <a
-              key={item.label}
-              href={item.href}
-              {...(item.external
-                ? { target: "_blank", rel: "noopener noreferrer" }
-                : {})}
-              className="relative rounded-md px-3 py-1.5 text-(--color-text) transition-colors hover:text-(--color-brand)"
-            >
-              {item.label}
-            </a>
-          ))}
+          {navItems.map((item) =>
+            item.external ? (
+              <a
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative rounded-md px-3 py-1.5 text-(--color-text) transition-colors hover:text-(--color-brand)"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="relative rounded-md px-3 py-1.5 text-(--color-text) transition-colors hover:text-(--color-brand)"
+              >
+                {item.label}
+              </Link>
+            )
+          )}
         </nav>
 
         {/* Right actions */}
