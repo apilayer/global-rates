@@ -98,7 +98,6 @@ jobs:
             --comment "GlobalRates staging deployment ${GITHUB_SHA}" \
             --parameters 'commands=[
               "bash -s <<'\''DEPLOY_SCRIPT'\''",
-
               "set -u",
 
               "APP_ROOT=\"/var/www/devtools/global-rates\"",
@@ -106,6 +105,7 @@ jobs:
               "PM2_APP_NAME=\"globalrates\"",
               "APP_PORT=\"3004\"",
               "NODE_MODULES_BACKUP=\"${APP_ROOT}/node_modules_backup\"",
+
               "export HOME=\"/root\"",
               "export NVM_DIR=\"/root/.nvm\"",
               "source /root/.nvm/nvm.sh",
@@ -125,43 +125,29 @@ jobs:
 
               "echo \"Backing up node_modules...\"",
 
-              if [[ -d "${APP_ROOT}/node_modules" ]]; then
+              "if [[ -d \"${APP_ROOT}/node_modules\" ]]; then",
+              "  echo \"Existing node_modules found.\"",
+              "  echo \"Backing up node_modules...\"",
+              "  rm -rf \"${NODE_MODULES_BACKUP}\"",
+              "  mv \"${APP_ROOT}/node_modules\" \"${NODE_MODULES_BACKUP}\"",
+              "  NODE_MODULES_BACKUP_CREATED=true",
+              "  echo \"node_modules backup created.\"",
+              "else",
+              "  echo \"No existing node_modules found.\"",
+              "  echo \"Skipping node_modules backup.\"",
+              "  NODE_MODULES_BACKUP_CREATED=false",
+              "fi",
 
-                echo "Existing node_modules found."
-                echo "Backing up node_modules..."
-
-                rm -rf "${NODE_MODULES_BACKUP}"
-
-                mv "${APP_ROOT}/node_modules" "${NODE_MODULES_BACKUP}"
-
-                NODE_MODULES_BACKUP_CREATED=true
-
-                echo "node_modules backup created."
-
-              else
-
-                echo "No existing node_modules found."
-                echo "Skipping node_modules backup."
-
-                NODE_MODULES_BACKUP_CREATED=false
-
-              fi
               "echo \"Pulling latest ${GIT_BRANCH} code...\"",
 
               "if ! git pull origin \"${GIT_BRANCH}\"; then",
-
               "  echo \"ERROR: git pull failed.\"",
-
               "  echo \"Restoring node_modules...\"",
-
               "  rm -rf \"${APP_ROOT}/node_modules\"",
-
               "  if [[ -d \"${NODE_MODULES_BACKUP}\" ]]; then",
               "    mv \"${NODE_MODULES_BACKUP}\" \"${APP_ROOT}/node_modules\"",
               "  fi",
-
               "  exit 1",
-
               "fi",
 
               "CURRENT_COMMIT=$(git rev-parse HEAD)",
@@ -173,19 +159,14 @@ jobs:
               "echo \"Installing dependencies...\"",
 
               "if ! npm ci; then",
-
               "  echo \"ERROR: npm ci failed.\"",
-
               "  ROLLBACK_REQUIRED=true",
-
               "fi",
 
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-
               "  echo \"Reloading PM2...\"",
 
               "  if ! pm2 reload \"${PM2_APP_NAME}\"; then",
-
               "    echo \"ERROR: PM2 reload failed.\"",
               "    ROLLBACK_REQUIRED=true",
               "  fi",
@@ -193,7 +174,6 @@ jobs:
               "fi",
 
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-
               "  echo \"Running health check...\"",
 
               "  HEALTH_OK=false",
@@ -201,14 +181,11 @@ jobs:
               "  for attempt in {1..30}; do",
 
               "    if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
-
               "      HEALTH_OK=true",
               "      break",
-
               "    fi",
 
               "    echo \"Health check attempt ${attempt}/30 failed.\"",
-
               "    sleep 2",
 
               "  done",
@@ -230,7 +207,6 @@ jobs:
               "  echo \"Current commit: ${CURRENT_COMMIT}\"",
 
               "  echo \"Keeping node_modules backup for rollback:\"",
-
               "  echo \"${NODE_MODULES_BACKUP}\"",
 
               "  exit 0",
@@ -255,11 +231,14 @@ jobs:
 
               "rm -rf \"${APP_ROOT}/node_modules\"",
 
-              "if [[ ! -d \"${NODE_MODULES_BACKUP}\" ]]; then",
+              "if [[ \"${NODE_MODULES_BACKUP_CREATED}\" != \"true\" ]]; then",
+              "  echo \"ERROR: No previous node_modules backup exists.\"",
+              "  exit 1",
+              "fi",
 
+              "if [[ ! -d \"${NODE_MODULES_BACKUP}\" ]]; then",
               "  echo \"ERROR: node_modules backup not found.\"",
               "  exit 1",
-
               "fi",
 
               "mv \"${NODE_MODULES_BACKUP}\" \"${APP_ROOT}/node_modules\"",
@@ -267,10 +246,8 @@ jobs:
               "echo \"Reloading previous version...\"",
 
               "if ! pm2 reload \"${PM2_APP_NAME}\"; then",
-
               "  echo \"ERROR: PM2 rollback reload failed.\"",
               "  exit 1",
-
               "fi",
 
               "echo \"Checking rolled-back application...\"",
@@ -280,14 +257,11 @@ jobs:
               "for attempt in {1..30}; do",
 
               "  if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
-
               "    ROLLBACK_HEALTH_OK=true",
               "    break",
-
               "  fi",
 
               "  echo \"Rollback health check attempt ${attempt}/30 failed.\"",
-
               "  sleep 2",
 
               "done",
