@@ -13,10 +13,10 @@ permissions:
 
 # GLOBAL CONFIGURATION
 env:
-  APP_ROOT: /var/www/devtools/global-rates
+  APP_ROOT: ${{ vars.APP_ROOT }}
   GIT_BRANCH: staging
-  PM2_APP_NAME: globalrates
-  APP_PORT: "3004"
+  PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+  APP_PORT: ${{ vars.APP_PORT }}
 
 
 jobs:
