@@ -125,17 +125,27 @@ jobs:
 
               "echo \"Backing up node_modules...\"",
 
-              "if [[ ! -d \"${APP_ROOT}/node_modules\" ]]; then",
-              "  echo \"ERROR: node_modules does not exist.\"",
-              "  exit 1",
-              "fi",
+              if [[ -d "${APP_ROOT}/node_modules" ]]; then
 
-              "rm -rf \"${NODE_MODULES_BACKUP}\"",
+                echo "Existing node_modules found."
+                echo "Backing up node_modules..."
 
-              "mv \"${APP_ROOT}/node_modules\" \"${NODE_MODULES_BACKUP}\"",
+                rm -rf "${NODE_MODULES_BACKUP}"
 
-              "echo \"node_modules backup created.\"",
+                mv "${APP_ROOT}/node_modules" "${NODE_MODULES_BACKUP}"
 
+                NODE_MODULES_BACKUP_CREATED=true
+
+                echo "node_modules backup created."
+
+              else
+
+                echo "No existing node_modules found."
+                echo "Skipping node_modules backup."
+
+                NODE_MODULES_BACKUP_CREATED=false
+
+              fi
               "echo \"Pulling latest ${GIT_BRANCH} code...\"",
 
               "if ! git pull origin \"${GIT_BRANCH}\"; then",
@@ -219,9 +229,9 @@ jobs:
               "  echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
               "  echo \"Current commit: ${CURRENT_COMMIT}\"",
 
-              "  echo \"Removing node_modules backup...\"",
+              "  echo \"Keeping node_modules backup for rollback:\"",
 
-              "  rm -rf \"${NODE_MODULES_BACKUP}\"",
+              "  echo \"${NODE_MODULES_BACKUP}\"",
 
               "  exit 0",
 
