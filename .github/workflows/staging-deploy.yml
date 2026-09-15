@@ -24,10 +24,7 @@ jobs:
 
     steps:
 
-      # ==================================================
       # 1. Checkout repository
-      # ==================================================
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -37,22 +34,14 @@ jobs:
           echo "Ref: $GITHUB_REF"
           echo "Event: $GITHUB_EVENT_NAME"
 
-
-      # ==================================================
       # 2. Authenticate to AWS using GitHub OIDC
-      # ==================================================
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-
-      # ==================================================
-      # 3. Find running EC2 instance from ASG
-      # ==================================================
-
+      # 3. Find one running EC2 instance from ASG
       - name: Find staging EC2 instance
         id: instance
         env:
@@ -66,7 +55,7 @@ jobs:
             --filters \
               "Name=tag:aws:autoscaling:groupName,Values=${ASG_NAME}" \
               "Name=instance-state-name,Values=running" \
-            --query 'Reservations[].Instances[].InstanceId' \
+            --query 'Reservations[].Instances[].InstanceId | [0]' \
             --output text)
 
           if [[ -z "${INSTANCE_ID}" || "${INSTANCE_ID}" == "None" ]]; then
@@ -78,20 +67,13 @@ jobs:
 
           echo "instance_id=${INSTANCE_ID}" >> "${GITHUB_OUTPUT}"
 
-
-      # ==================================================
       # 4. Send deployment command to EC2 using SSM
-      # ==================================================
-
       - name: Start deployment
         id: deployment
         env:
           INSTANCE_ID: ${{ steps.instance.outputs.instance_id }}
-
         run: |
-
           echo "Starting deployment on ${INSTANCE_ID}..."
-
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "${INSTANCE_ID}" \
             --document-name "AWS-RunShellScript" \
@@ -99,32 +81,23 @@ jobs:
             --parameters 'commands=[
               "bash -s <<'\''DEPLOY_SCRIPT'\''",
               "set -u",
-
               "APP_ROOT=\"/var/www/devtools/global-rates\"",
               "GIT_BRANCH=\"staging\"",
               "PM2_APP_NAME=\"globalrates\"",
               "APP_PORT=\"3004\"",
               "NODE_MODULES_BACKUP=\"${APP_ROOT}/node_modules_backup\"",
-
               "export HOME=\"/root\"",
               "export NVM_DIR=\"/root/.nvm\"",
               "source /root/.nvm/nvm.sh",
               "nvm use 20",
-
               "cd \"${APP_ROOT}\" || exit 1",
-
               "echo \"========================================\"",
               "echo \"Starting GlobalRates deployment\"",
               "echo \"========================================\"",
-
               "echo \"Saving current commit...\"",
-
               "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
-
               "echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
-
               "echo \"Backing up node_modules...\"",
-
               "if [[ -d \"${APP_ROOT}/node_modules\" ]]; then",
               "  echo \"Existing node_modules found.\"",
               "  echo \"Backing up node_modules...\"",
@@ -137,9 +110,7 @@ jobs:
               "  echo \"Skipping node_modules backup.\"",
               "  NODE_MODULES_BACKUP_CREATED=false",
               "fi",
-
               "echo \"Pulling latest ${GIT_BRANCH} code...\"",
-
               "if ! git pull origin \"${GIT_BRANCH}\"; then",
               "  echo \"ERROR: git pull failed.\"",
               "  echo \"Restoring node_modules...\"",
@@ -149,68 +120,46 @@ jobs:
               "  fi",
               "  exit 1",
               "fi",
-
               "CURRENT_COMMIT=$(git rev-parse HEAD)",
-
               "echo \"Current commit: ${CURRENT_COMMIT}\"",
-
               "ROLLBACK_REQUIRED=false",
-
               "echo \"Installing dependencies...\"",
-
               "if ! npm ci; then",
               "  echo \"ERROR: npm ci failed.\"",
               "  ROLLBACK_REQUIRED=true",
               "fi",
-
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
               "  echo \"Reloading PM2...\"",
-
               "  if ! pm2 reload \"${PM2_APP_NAME}\"; then",
               "    echo \"ERROR: PM2 reload failed.\"",
               "    ROLLBACK_REQUIRED=true",
               "  fi",
-
               "fi",
-
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
               "  echo \"Running health check...\"",
-
               "  HEALTH_OK=false",
-
               "  for attempt in {1..30}; do",
-
               "    if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
               "      HEALTH_OK=true",
               "      break",
               "    fi",
-
               "    echo \"Health check attempt ${attempt}/30 failed.\"",
               "    sleep 2",
-
               "  done",
-
               "  if [[ \"${HEALTH_OK}\" != \"true\" ]]; then",
               "    echo \"ERROR: Health check failed.\"",
               "    ROLLBACK_REQUIRED=true",
               "  fi",
-
               "fi",
-
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-
               "  echo \"========================================\"",
               "  echo \"DEPLOYMENT SUCCESSFUL\"",
               "  echo \"========================================\"",
-
               "  echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
               "  echo \"Current commit: ${CURRENT_COMMIT}\"",
-
               "  echo \"Keeping node_modules backup for rollback:\"",
               "  echo \"${NODE_MODULES_BACKUP}\"",
-
               "  exit 0",
-
               "fi",
 
               "echo \"========================================\"",
@@ -293,11 +242,7 @@ jobs:
 
           echo "command_id=${COMMAND_ID}" >> "${GITHUB_OUTPUT}"
 
-
-      # ==================================================
       # 5. Wait for deployment result
-      # ==================================================
-
       - name: Wait for deployment
         env:
           INSTANCE_ID: ${{ steps.instance.outputs.instance_id }}
