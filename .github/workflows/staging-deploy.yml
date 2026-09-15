@@ -11,93 +11,142 @@ permissions:
   id-token: write
   contents: read
 
+# GLOBAL CONFIGURATION
 env:
   APP_ROOT: /var/www/devtools/global-rates
   GIT_BRANCH: staging
   PM2_APP_NAME: globalrates
   APP_PORT: "3004"
 
+
 jobs:
-  deploy:
-    name: Deploy GlobalRates to Staging
+
+  # JOB 1: PREPARE
+  prepare:
+    name: Prepare deployment
     runs-on: ubuntu-latest
+
+    outputs:
+      instance_ids: ${{ steps.instances.outputs.instance_ids }}
 
     steps:
 
-      # 1. Checkout repository
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
+      # 2. Show GitHub context
       - name: Check GitHub context
         run: |
           echo "Repository: $GITHUB_REPOSITORY"
           echo "Ref: $GITHUB_REF"
           echo "Event: $GITHUB_EVENT_NAME"
 
-      # 2. Authenticate to AWS using GitHub OIDC
+      # 3. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # 3. Find one running EC2 instance from ASG
-      - name: Find staging EC2 instance
-        id: instance
+      # 4. Find all running EC2 instances
+      - name: Find staging EC2 instances
+        id: instances
         env:
           ASG_NAME: ${{ vars.ASG_NAME }}
 
         run: |
 
-          echo "Finding running EC2 instance..."
+          echo "========================================"
+          echo "Finding running EC2 instances"
+          echo "========================================"
 
-          INSTANCE_ID=$(aws ec2 describe-instances \
+          INSTANCE_IDS=$(aws ec2 describe-instances \
             --filters \
               "Name=tag:aws:autoscaling:groupName,Values=${ASG_NAME}" \
               "Name=instance-state-name,Values=running" \
-            --query 'Reservations[].Instances[].InstanceId | [0]' \
+            --query 'Reservations[].Instances[].InstanceId' \
             --output text)
 
-          if [[ -z "${INSTANCE_ID}" || "${INSTANCE_ID}" == "None" ]]; then
-            echo "ERROR: No running EC2 instance found for ASG."
+          if [[ -z "${INSTANCE_IDS}" || "${INSTANCE_IDS}" == "None" ]]; then
+            echo "ERROR: No running EC2 instances found for ASG."
             exit 1
           fi
 
-          echo "Target EC2 instance: ${INSTANCE_ID}"
+          echo "Target EC2 instances:"
+          echo "${INSTANCE_IDS}"
 
-          echo "instance_id=${INSTANCE_ID}" >> "${GITHUB_OUTPUT}"
+          echo "instance_ids=${INSTANCE_IDS}" >> "${GITHUB_OUTPUT}"
 
-      # 4. Send deployment command to EC2 using SSM
+
+  # JOB 2: DEPLOY
+  deploy:
+    name: Deploy to all instances
+    runs-on: ubuntu-latest
+
+    needs: prepare
+
+    outputs:
+      command_id: ${{ steps.deployment.outputs.command_id }}
+
+    steps:
+
+      # 1. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # 2. Send deployment command to all instances
       - name: Start deployment
         id: deployment
         env:
-          INSTANCE_ID: ${{ steps.instance.outputs.instance_id }}
+          INSTANCE_IDS: ${{ needs.prepare.outputs.instance_ids }}
+
         run: |
-          echo "Starting deployment on ${INSTANCE_ID}..."
+
+          echo "========================================"
+          echo "Starting deployment"
+          echo "========================================"
+
+          echo "Target instances:"
+          echo "${INSTANCE_IDS}"
+
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${INSTANCE_ID}" \
+            --instance-ids ${INSTANCE_IDS} \
             --document-name "AWS-RunShellScript" \
             --comment "GlobalRates staging deployment ${GITHUB_SHA}" \
             --parameters 'commands=[
               "bash -s <<'\''DEPLOY_SCRIPT'\''",
               "set -u",
+
               "APP_ROOT=\"/var/www/devtools/global-rates\"",
               "GIT_BRANCH=\"staging\"",
               "PM2_APP_NAME=\"globalrates\"",
               "APP_PORT=\"3004\"",
               "NODE_MODULES_BACKUP=\"${APP_ROOT}/node_modules_backup\"",
+
               "export HOME=\"/root\"",
               "export NVM_DIR=\"/root/.nvm\"",
               "source /root/.nvm/nvm.sh",
               "nvm use 20",
+
               "cd \"${APP_ROOT}\" || exit 1",
+
               "echo \"========================================\"",
               "echo \"Starting GlobalRates deployment\"",
               "echo \"========================================\"",
+
               "echo \"Saving current commit...\"",
+
               "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
+
               "echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
+
               "echo \"Backing up node_modules...\"",
+
               "if [[ -d \"${APP_ROOT}/node_modules\" ]]; then",
               "  echo \"Existing node_modules found.\"",
               "  echo \"Backing up node_modules...\"",
@@ -110,7 +159,9 @@ jobs:
               "  echo \"Skipping node_modules backup.\"",
               "  NODE_MODULES_BACKUP_CREATED=false",
               "fi",
+
               "echo \"Pulling latest ${GIT_BRANCH} code...\"",
+
               "if ! git pull origin \"${GIT_BRANCH}\"; then",
               "  echo \"ERROR: git pull failed.\"",
               "  echo \"Restoring node_modules...\"",
@@ -120,46 +171,68 @@ jobs:
               "  fi",
               "  exit 1",
               "fi",
+
               "CURRENT_COMMIT=$(git rev-parse HEAD)",
+
               "echo \"Current commit: ${CURRENT_COMMIT}\"",
+
               "ROLLBACK_REQUIRED=false",
+
               "echo \"Installing dependencies...\"",
+
               "if ! npm ci; then",
               "  echo \"ERROR: npm ci failed.\"",
               "  ROLLBACK_REQUIRED=true",
               "fi",
+
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
               "  echo \"Reloading PM2...\"",
+
               "  if ! pm2 reload \"${PM2_APP_NAME}\"; then",
               "    echo \"ERROR: PM2 reload failed.\"",
               "    ROLLBACK_REQUIRED=true",
               "  fi",
+
               "fi",
+
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
               "  echo \"Running health check...\"",
+
               "  HEALTH_OK=false",
+
               "  for attempt in {1..30}; do",
+
               "    if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
               "      HEALTH_OK=true",
               "      break",
               "    fi",
+
               "    echo \"Health check attempt ${attempt}/30 failed.\"",
               "    sleep 2",
+
               "  done",
+
               "  if [[ \"${HEALTH_OK}\" != \"true\" ]]; then",
               "    echo \"ERROR: Health check failed.\"",
               "    ROLLBACK_REQUIRED=true",
               "  fi",
+
               "fi",
+
               "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
+
               "  echo \"========================================\"",
               "  echo \"DEPLOYMENT SUCCESSFUL\"",
               "  echo \"========================================\"",
+
               "  echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
               "  echo \"Current commit: ${CURRENT_COMMIT}\"",
+
               "  echo \"Keeping node_modules backup for rollback:\"",
               "  echo \"${NODE_MODULES_BACKUP}\"",
+
               "  exit 0",
+
               "fi",
 
               "echo \"========================================\"",
@@ -242,82 +315,116 @@ jobs:
 
           echo "command_id=${COMMAND_ID}" >> "${GITHUB_OUTPUT}"
 
-      # 5. Wait for deployment result
-      - name: Wait for deployment
+
+  # JOB 3: VERIFY
+  verify:
+    name: Verify all instances
+    runs-on: ubuntu-latest
+
+    needs:
+      - prepare
+      - deploy
+
+    steps:
+
+      # 1. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # 2. Wait for every instance
+      - name: Verify deployment
         env:
-          INSTANCE_ID: ${{ steps.instance.outputs.instance_id }}
-          COMMAND_ID: ${{ steps.deployment.outputs.command_id }}
+          INSTANCE_IDS: ${{ needs.prepare.outputs.instance_ids }}
+          COMMAND_ID: ${{ needs.deploy.outputs.command_id }}
 
         run: |
 
-          echo "Waiting for deployment result..."
+          echo "========================================"
+          echo "Waiting for deployment result"
+          echo "========================================"
 
-          for attempt in {1..60}; do
+          for INSTANCE_ID in ${INSTANCE_IDS}; do
 
-            STATUS=$(aws ssm get-command-invocation \
-              --command-id "${COMMAND_ID}" \
-              --instance-id "${INSTANCE_ID}" \
-              --query 'Status' \
-              --output text)
+            echo ""
+            echo "Checking deployment on ${INSTANCE_ID}..."
 
-            echo "Deployment status: ${STATUS}"
+            INSTANCE_SUCCESS=false
 
-            case "${STATUS}" in
+            for attempt in {1..60}; do
 
-              Success)
+              STATUS=$(aws ssm get-command-invocation \
+                --command-id "${COMMAND_ID}" \
+                --instance-id "${INSTANCE_ID}" \
+                --query 'Status' \
+                --output text 2>/dev/null || echo "Pending")
 
-                echo
-                echo "========================================"
-                echo "DEPLOYMENT SUCCESSFUL"
-                echo "========================================"
+              echo "${INSTANCE_ID}: ${STATUS}"
 
-                echo
-                echo "Deployment output:"
+              case "${STATUS}" in
 
-                aws ssm get-command-invocation \
-                  --command-id "${COMMAND_ID}" \
-                  --instance-id "${INSTANCE_ID}" \
-                  --query 'StandardOutputContent' \
-                  --output text
+                Success)
 
-                exit 0
-                ;;
+                  INSTANCE_SUCCESS=true
+                  break
+                  ;;
 
-              Failed|Cancelled|TimedOut|Cancelling)
+                Failed|Cancelled|TimedOut|Cancelling)
 
-                echo
-                echo "========================================"
-                echo "DEPLOYMENT FAILED"
-                echo "========================================"
+                  echo ""
+                  echo "========================================"
+                  echo "DEPLOYMENT FAILED"
+                  echo "Instance: ${INSTANCE_ID}"
+                  echo "========================================"
 
-                echo
-                echo "Deployment output:"
+                  echo ""
+                  echo "Deployment output:"
 
-                aws ssm get-command-invocation \
-                  --command-id "${COMMAND_ID}" \
-                  --instance-id "${INSTANCE_ID}" \
-                  --query 'StandardOutputContent' \
-                  --output text
+                  aws ssm get-command-invocation \
+                    --command-id "${COMMAND_ID}" \
+                    --instance-id "${INSTANCE_ID}" \
+                    --query 'StandardOutputContent' \
+                    --output text || true
 
-                echo
-                echo "Error output:"
+                  echo ""
+                  echo "Error output:"
 
-                aws ssm get-command-invocation \
-                  --command-id "${COMMAND_ID}" \
-                  --instance-id "${INSTANCE_ID}" \
-                  --query 'StandardErrorContent' \
-                  --output text
+                  aws ssm get-command-invocation \
+                    --command-id "${COMMAND_ID}" \
+                    --instance-id "${INSTANCE_ID}" \
+                    --query 'StandardErrorContent' \
+                    --output text || true
 
-                exit 1
-                ;;
+                  exit 1
+                  ;;
 
-            esac
+              esac
 
-            sleep 5
+              sleep 5
+
+            done
+
+            if [[ "${INSTANCE_SUCCESS}" != "true" ]]; then
+
+              echo ""
+              echo "========================================"
+              echo "DEPLOYMENT TIMED OUT"
+              echo "Instance: ${INSTANCE_ID}"
+              echo "========================================"
+
+              exit 1
+
+            fi
+
+            echo ""
+            echo "Deployment successful on ${INSTANCE_ID}."
 
           done
 
-          echo
-          echo "ERROR: Deployment timed out."
 
-          exit 1
+          echo ""
+          echo "========================================"
+          echo "DEPLOYMENT SUCCESSFUL ON ALL INSTANCES"
+          echo "========================================"
