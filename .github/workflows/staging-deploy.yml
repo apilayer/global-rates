@@ -106,7 +106,7 @@ jobs:
               "PM2_APP_NAME=\"globalrates\"",
               "APP_PORT=\"3004\"",
               "NODE_MODULES_BACKUP=\"${APP_ROOT}/node_modules_backup\"",
-
+              "export HOME=\"/root\"",
               "export NVM_DIR=\"/root/.nvm\"",
               "source /root/.nvm/nvm.sh",
               "nvm use 20",
