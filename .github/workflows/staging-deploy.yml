@@ -97,6 +97,8 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "GlobalRates staging deployment ${GITHUB_SHA}" \
             --parameters 'commands=[
+              "bash -s <<'\''DEPLOY_SCRIPT'\''",
+
               "set -u",
 
               "APP_ROOT=\"/var/www/devtools/global-rates\"",
@@ -296,7 +298,9 @@ jobs:
 
               "echo \"Application restored to: ${PREVIOUS_COMMIT}\"",
 
-              "exit 1"
+              "exit 1",
+
+              "DEPLOY_SCRIPT"
             ]' \
             --query 'Command.CommandId' \
             --output text)
@@ -349,7 +353,6 @@ jobs:
 
                 exit 0
                 ;;
-
 
               Failed|Cancelled|TimedOut|Cancelling)
 
