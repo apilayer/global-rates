@@ -1,4 +1,4 @@
-name: GlobalRates - Staging CI/CD
+name: Application CI/CD
 
 on:
   push:
@@ -13,14 +13,16 @@ permissions:
 
 # GLOBAL CONFIGURATION
 env:
+  APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
   APP_ROOT: ${{ vars.APP_ROOT }}
-  GIT_BRANCH: staging
-  PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
   APP_PORT: ${{ vars.APP_PORT }}
+  ASG_NAME: ${{ vars.ASG_NAME }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  GIT_BRANCH: ${{ vars.GIT_BRANCH }}
+  PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
 
 
 jobs:
-
   # JOB 1: PREPARE
   prepare:
     name: Prepare deployment
@@ -30,18 +32,33 @@ jobs:
       instance_ids: ${{ steps.instances.outputs.instance_ids }}
 
     steps:
-
       # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v4
 
-
       # 2. Show GitHub context
       - name: Check GitHub context
         run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Ref: $GITHUB_REF"
-          echo "Event: $GITHUB_EVENT_NAME"
+          echo "========================================"
+          echo "GitHub Context"
+          echo "========================================"
+
+          echo "Repository: ${GITHUB_REPOSITORY}"
+          echo "Ref: ${GITHUB_REF}"
+          echo "Event: ${GITHUB_EVENT_NAME}"
+          echo "Commit: ${GITHUB_SHA}"
+
+          echo ""
+          echo "========================================"
+          echo "Application Configuration"
+          echo "========================================"
+
+          echo "Application: ${APP_DISPLAY_NAME}"
+          echo "Application Root: ${APP_ROOT}"
+          echo "PM2 Application: ${PM2_APP_NAME}"
+          echo "Application Port: ${APP_PORT}"
+          echo "Git Branch: ${GIT_BRANCH}"
+
 
       # 3. Configure AWS credentials
       - name: Configure AWS credentials
@@ -50,8 +67,9 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+
       # 4. Find all running EC2 instances
-      - name: Find staging EC2 instances
+      - name: Find running EC2 instances
         id: instances
         env:
           ASG_NAME: ${{ vars.ASG_NAME }}
@@ -61,6 +79,8 @@ jobs:
           echo "========================================"
           echo "Finding running EC2 instances"
           echo "========================================"
+
+          echo "ASG: ${ASG_NAME}"
 
           INSTANCE_IDS=$(aws ec2 describe-instances \
             --filters \
@@ -74,11 +94,12 @@ jobs:
             exit 1
           fi
 
+          echo ""
           echo "Target EC2 instances:"
           echo "${INSTANCE_IDS}"
 
+          echo ""
           echo "instance_ids=${INSTANCE_IDS}" >> "${GITHUB_OUTPUT}"
-
 
   # JOB 2: DEPLOY
   deploy:
@@ -91,7 +112,6 @@ jobs:
       command_id: ${{ steps.deployment.outputs.command_id }}
 
     steps:
-
       # 1. Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -111,211 +131,452 @@ jobs:
           echo "Starting deployment"
           echo "========================================"
 
+          echo "Application: ${APP_DISPLAY_NAME}"
+          echo "Application Root: ${APP_ROOT}"
+          echo "PM2 Application: ${PM2_APP_NAME}"
+          echo "Application Port: ${APP_PORT}"
+          echo "Git Branch: ${GIT_BRANCH}"
+
+          echo ""
           echo "Target instances:"
           echo "${INSTANCE_IDS}"
+
+          # Build deployment script
+
+          DEPLOY_SCRIPT=$(cat <<EOF
+          #!/usr/bin/env bash
+
+          set -u
+
+          # ====================================================
+          # APPLICATION CONFIGURATION
+          # ====================================================
+
+          APP_DISPLAY_NAME="${APP_DISPLAY_NAME}"
+          APP_ROOT="${APP_ROOT}"
+          APP_PORT="${APP_PORT}"
+          GIT_BRANCH="${GIT_BRANCH}"
+          PM2_APP_NAME="${PM2_APP_NAME}"
+
+          NODE_MODULES_BACKUP="\${APP_ROOT}/node_modules_backup"
+
+          export HOME="/root"
+          export NVM_DIR="/root/.nvm"
+
+
+          # ====================================================
+          # NODE / NVM
+          # ====================================================
+
+          if [[ ! -f "\${NVM_DIR}/nvm.sh" ]]; then
+            echo "ERROR: NVM was not found at \${NVM_DIR}/nvm.sh"
+            exit 1
+          fi
+
+          source "\${NVM_DIR}/nvm.sh"
+
+          nvm use 20
+
+
+          # ====================================================
+          # APPLICATION DIRECTORY
+          # ====================================================
+
+          cd "\${APP_ROOT}" || {
+            echo "ERROR: Application directory does not exist:"
+            echo "\${APP_ROOT}"
+            exit 1
+          }
+
+
+          echo "========================================"
+          echo "Starting \${APP_DISPLAY_NAME} deployment"
+          echo "========================================"
+
+          echo "Application root: \${APP_ROOT}"
+          echo "Git branch: \${GIT_BRANCH}"
+          echo "PM2 application: \${PM2_APP_NAME}"
+          echo "Application port: \${APP_PORT}"
+
+
+          # ====================================================
+          # SAVE CURRENT COMMIT
+          # ====================================================
+
+          echo ""
+          echo "Saving current commit..."
+
+          PREVIOUS_COMMIT=\$(git rev-parse HEAD)
+
+          echo "Previous commit: \${PREVIOUS_COMMIT}"
+
+
+          # ====================================================
+          # BACKUP NODE_MODULES
+          # ====================================================
+
+          echo ""
+          echo "Backing up node_modules..."
+
+          NODE_MODULES_BACKUP_CREATED=false
+
+          if [[ -d "\${APP_ROOT}/node_modules" ]]; then
+
+            echo "Existing node_modules found."
+
+            rm -rf "\${NODE_MODULES_BACKUP}"
+
+            mv \
+              "\${APP_ROOT}/node_modules" \
+              "\${NODE_MODULES_BACKUP}"
+
+            NODE_MODULES_BACKUP_CREATED=true
+
+            echo "node_modules backup created."
+
+          else
+
+            echo "No existing node_modules found."
+            echo "Skipping node_modules backup."
+
+          fi
+
+
+          # ====================================================
+          # PULL LATEST CODE
+          # ====================================================
+
+          echo ""
+          echo "Pulling latest \${GIT_BRANCH} code..."
+
+          if ! git pull origin "\${GIT_BRANCH}"; then
+
+            echo "ERROR: git pull failed."
+
+            echo "Restoring node_modules..."
+
+            rm -rf "\${APP_ROOT}/node_modules"
+
+            if [[ -d "\${NODE_MODULES_BACKUP}" ]]; then
+              mv \
+                "\${NODE_MODULES_BACKUP}" \
+                "\${APP_ROOT}/node_modules"
+            fi
+
+            exit 1
+
+          fi
+
+
+          CURRENT_COMMIT=\$(git rev-parse HEAD)
+
+          echo "Current commit: \${CURRENT_COMMIT}"
+
+
+          # ====================================================
+          # INSTALL DEPENDENCIES
+          # ====================================================
+
+          ROLLBACK_REQUIRED=false
+
+          echo ""
+          echo "Installing dependencies..."
+
+          if ! npm ci; then
+
+            echo "ERROR: npm ci failed."
+
+            ROLLBACK_REQUIRED=true
+
+          fi
+
+
+          # ====================================================
+          # START / RELOAD PM2
+          # ====================================================
+
+          if [[ "\${ROLLBACK_REQUIRED}" == "false" ]]; then
+
+            echo ""
+            echo "Starting/reloading PM2..."
+
+            if pm2 describe "\${PM2_APP_NAME}" >/dev/null 2>&1; then
+
+              echo "PM2 process exists."
+              echo "Reloading \${PM2_APP_NAME}..."
+
+              if ! pm2 reload "\${PM2_APP_NAME}" --update-env; then
+
+                echo "ERROR: PM2 reload failed."
+                ROLLBACK_REQUIRED=true
+
+              fi
+
+            else
+
+              echo "PM2 process does not exist."
+              echo "Starting \${PM2_APP_NAME}..."
+
+              if ! pm2 start npm \
+                --name "\${PM2_APP_NAME}" \
+                --cwd "\${APP_ROOT}" \
+                -- start -- -p "\${APP_PORT}"; then
+
+                echo "ERROR: PM2 start failed."
+                ROLLBACK_REQUIRED=true
+
+              fi
+
+            fi
+
+            if [[ "\${ROLLBACK_REQUIRED}" == "false" ]]; then
+              pm2 save
+            fi
+
+          fi
+
+
+          # ====================================================
+          # HEALTH CHECK
+          # ====================================================
+
+          if [[ "\${ROLLBACK_REQUIRED}" == "false" ]]; then
+
+            echo ""
+            echo "Running health check..."
+
+            HEALTH_OK=false
+
+            for attempt in {1..30}; do
+
+              if curl \
+                --fail \
+                --silent \
+                --show-error \
+                "http://127.0.0.1:\${APP_PORT}/" \
+                > /dev/null; then
+
+                HEALTH_OK=true
+                break
+
+              fi
+
+              echo "Health check attempt \${attempt}/30 failed."
+
+              sleep 2
+
+            done
+
+
+            if [[ "\${HEALTH_OK}" != "true" ]]; then
+
+              echo "ERROR: Health check failed."
+
+              ROLLBACK_REQUIRED=true
+
+            fi
+
+          fi
+
+
+          # ====================================================
+          # DEPLOYMENT SUCCESS
+          # ====================================================
+
+          if [[ "\${ROLLBACK_REQUIRED}" == "false" ]]; then
+
+            echo ""
+            echo "========================================"
+            echo "DEPLOYMENT SUCCESSFUL"
+            echo "========================================"
+
+            echo "Application: \${APP_DISPLAY_NAME}"
+            echo "Previous commit: \${PREVIOUS_COMMIT}"
+            echo "Current commit: \${CURRENT_COMMIT}"
+
+            echo ""
+            echo "Keeping node_modules backup for rollback:"
+            echo "\${NODE_MODULES_BACKUP}"
+
+            exit 0
+
+          fi
+
+
+          # ====================================================
+          # ROLLBACK
+          # ====================================================
+
+          echo ""
+          echo "========================================"
+          echo "ROLLBACK STARTING"
+          echo "========================================"
+
+          echo "Restoring commit: \${PREVIOUS_COMMIT}"
+
+
+          # ----------------------------------------------------
+          # Stop application
+          # ----------------------------------------------------
+
+          echo ""
+          echo "Stopping application..."
+
+          pm2 stop "\${PM2_APP_NAME}" || true
+
+
+          # ----------------------------------------------------
+          # Restore Git commit
+          # ----------------------------------------------------
+
+          echo ""
+          echo "Restoring previous Git commit..."
+
+          git reset --hard "\${PREVIOUS_COMMIT}"
+
+
+          # ----------------------------------------------------
+          # Restore node_modules
+          # ----------------------------------------------------
+
+          echo ""
+          echo "Restoring previous node_modules..."
+
+          rm -rf "\${APP_ROOT}/node_modules"
+
+
+          if [[ "\${NODE_MODULES_BACKUP_CREATED}" != "true" ]]; then
+
+            echo "ERROR: No previous node_modules backup exists."
+            exit 1
+
+          fi
+
+
+          if [[ ! -d "\${NODE_MODULES_BACKUP}" ]]; then
+
+            echo "ERROR: node_modules backup not found."
+            exit 1
+
+          fi
+
+
+          mv \
+            "\${NODE_MODULES_BACKUP}" \
+            "\${APP_ROOT}/node_modules"
+
+
+          # ----------------------------------------------------
+          # Start / reload previous version
+          # ----------------------------------------------------
+
+          echo ""
+          echo "Reloading previous version..."
+
+          if pm2 describe "\${PM2_APP_NAME}" >/dev/null 2>&1; then
+
+            if ! pm2 reload "\${PM2_APP_NAME}" --update-env; then
+
+              echo "ERROR: PM2 rollback reload failed."
+              exit 1
+
+            fi
+
+          else
+
+            echo "PM2 process does not exist."
+            echo "Starting previous version..."
+
+            if ! pm2 start npm \
+              --name "\${PM2_APP_NAME}" \
+              --cwd "\${APP_ROOT}" \
+              -- start -- -p "\${APP_PORT}"; then
+
+              echo "ERROR: PM2 rollback start failed."
+              exit 1
+
+            fi
+
+          fi
+
+          pm2 save
+
+
+          # ====================================================
+          # ROLLBACK HEALTH CHECK
+          # ====================================================
+
+          echo ""
+          echo "Checking rolled-back application..."
+
+          ROLLBACK_HEALTH_OK=false
+
+          for attempt in {1..30}; do
+
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              "http://127.0.0.1:\${APP_PORT}/" \
+              > /dev/null; then
+
+              ROLLBACK_HEALTH_OK=true
+              break
+
+            fi
+
+            echo "Rollback health check attempt \${attempt}/30 failed."
+
+            sleep 2
+
+          done
+
+
+          if [[ "\${ROLLBACK_HEALTH_OK}" != "true" ]]; then
+
+            echo ""
+            echo "========================================"
+            echo "ROLLBACK FAILED"
+            echo "========================================"
+
+            exit 1
+
+          fi
+
+
+          echo ""
+          echo "========================================"
+          echo "ROLLBACK SUCCESSFUL"
+          echo "========================================"
+
+          echo "Application: \${APP_DISPLAY_NAME}"
+          echo "Application restored to: \${PREVIOUS_COMMIT}"
+
+          exit 1
+
+          EOF
+          )
+
+
+          # ----------------------------------------------------
+          # Send deployment script through SSM
+          # ----------------------------------------------------
 
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids ${INSTANCE_IDS} \
             --document-name "AWS-RunShellScript" \
-            --comment "GlobalRates staging deployment ${GITHUB_SHA}" \
-            --parameters 'commands=[
-              "bash -s <<'\''DEPLOY_SCRIPT'\''",
-              "set -u",
-
-              "APP_ROOT=\"/var/www/devtools/global-rates\"",
-              "GIT_BRANCH=\"staging\"",
-              "PM2_APP_NAME=\"globalrates\"",
-              "APP_PORT=\"3004\"",
-              "NODE_MODULES_BACKUP=\"${APP_ROOT}/node_modules_backup\"",
-
-              "export HOME=\"/root\"",
-              "export NVM_DIR=\"/root/.nvm\"",
-              "source /root/.nvm/nvm.sh",
-              "nvm use 20",
-
-              "cd \"${APP_ROOT}\" || exit 1",
-
-              "echo \"========================================\"",
-              "echo \"Starting GlobalRates deployment\"",
-              "echo \"========================================\"",
-
-              "echo \"Saving current commit...\"",
-
-              "PREVIOUS_COMMIT=$(git rev-parse HEAD)",
-
-              "echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
-
-              "echo \"Backing up node_modules...\"",
-
-              "if [[ -d \"${APP_ROOT}/node_modules\" ]]; then",
-              "  echo \"Existing node_modules found.\"",
-              "  echo \"Backing up node_modules...\"",
-              "  rm -rf \"${NODE_MODULES_BACKUP}\"",
-              "  mv \"${APP_ROOT}/node_modules\" \"${NODE_MODULES_BACKUP}\"",
-              "  NODE_MODULES_BACKUP_CREATED=true",
-              "  echo \"node_modules backup created.\"",
-              "else",
-              "  echo \"No existing node_modules found.\"",
-              "  echo \"Skipping node_modules backup.\"",
-              "  NODE_MODULES_BACKUP_CREATED=false",
-              "fi",
-
-              "echo \"Pulling latest ${GIT_BRANCH} code...\"",
-
-              "if ! git pull origin \"${GIT_BRANCH}\"; then",
-              "  echo \"ERROR: git pull failed.\"",
-              "  echo \"Restoring node_modules...\"",
-              "  rm -rf \"${APP_ROOT}/node_modules\"",
-              "  if [[ -d \"${NODE_MODULES_BACKUP}\" ]]; then",
-              "    mv \"${NODE_MODULES_BACKUP}\" \"${APP_ROOT}/node_modules\"",
-              "  fi",
-              "  exit 1",
-              "fi",
-
-              "CURRENT_COMMIT=$(git rev-parse HEAD)",
-
-              "echo \"Current commit: ${CURRENT_COMMIT}\"",
-
-              "ROLLBACK_REQUIRED=false",
-
-              "echo \"Installing dependencies...\"",
-
-              "if ! npm ci; then",
-              "  echo \"ERROR: npm ci failed.\"",
-              "  ROLLBACK_REQUIRED=true",
-              "fi",
-
-              "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-              "  echo \"Reloading PM2...\"",
-
-              "  if ! pm2 reload \"${PM2_APP_NAME}\"; then",
-              "    echo \"ERROR: PM2 reload failed.\"",
-              "    ROLLBACK_REQUIRED=true",
-              "  fi",
-
-              "fi",
-
-              "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-              "  echo \"Running health check...\"",
-
-              "  HEALTH_OK=false",
-
-              "  for attempt in {1..30}; do",
-
-              "    if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
-              "      HEALTH_OK=true",
-              "      break",
-              "    fi",
-
-              "    echo \"Health check attempt ${attempt}/30 failed.\"",
-              "    sleep 2",
-
-              "  done",
-
-              "  if [[ \"${HEALTH_OK}\" != \"true\" ]]; then",
-              "    echo \"ERROR: Health check failed.\"",
-              "    ROLLBACK_REQUIRED=true",
-              "  fi",
-
-              "fi",
-
-              "if [[ \"${ROLLBACK_REQUIRED}\" == \"false\" ]]; then",
-
-              "  echo \"========================================\"",
-              "  echo \"DEPLOYMENT SUCCESSFUL\"",
-              "  echo \"========================================\"",
-
-              "  echo \"Previous commit: ${PREVIOUS_COMMIT}\"",
-              "  echo \"Current commit: ${CURRENT_COMMIT}\"",
-
-              "  echo \"Keeping node_modules backup for rollback:\"",
-              "  echo \"${NODE_MODULES_BACKUP}\"",
-
-              "  exit 0",
-
-              "fi",
-
-              "echo \"========================================\"",
-              "echo \"ROLLBACK STARTING\"",
-              "echo \"========================================\"",
-
-              "echo \"Restoring commit: ${PREVIOUS_COMMIT}\"",
-
-              "echo \"Stopping application...\"",
-
-              "pm2 stop \"${PM2_APP_NAME}\" || true",
-
-              "echo \"Restoring previous Git commit...\"",
-
-              "git reset --hard \"${PREVIOUS_COMMIT}\"",
-
-              "echo \"Restoring previous node_modules...\"",
-
-              "rm -rf \"${APP_ROOT}/node_modules\"",
-
-              "if [[ \"${NODE_MODULES_BACKUP_CREATED}\" != \"true\" ]]; then",
-              "  echo \"ERROR: No previous node_modules backup exists.\"",
-              "  exit 1",
-              "fi",
-
-              "if [[ ! -d \"${NODE_MODULES_BACKUP}\" ]]; then",
-              "  echo \"ERROR: node_modules backup not found.\"",
-              "  exit 1",
-              "fi",
-
-              "mv \"${NODE_MODULES_BACKUP}\" \"${APP_ROOT}/node_modules\"",
-
-              "echo \"Reloading previous version...\"",
-
-              "if ! pm2 reload \"${PM2_APP_NAME}\"; then",
-              "  echo \"ERROR: PM2 rollback reload failed.\"",
-              "  exit 1",
-              "fi",
-
-              "echo \"Checking rolled-back application...\"",
-
-              "ROLLBACK_HEALTH_OK=false",
-
-              "for attempt in {1..30}; do",
-
-              "  if curl --fail --silent --show-error \"http://127.0.0.1:${APP_PORT}/\" > /dev/null; then",
-              "    ROLLBACK_HEALTH_OK=true",
-              "    break",
-              "  fi",
-
-              "  echo \"Rollback health check attempt ${attempt}/30 failed.\"",
-              "  sleep 2",
-
-              "done",
-
-              "if [[ \"${ROLLBACK_HEALTH_OK}\" != \"true\" ]]; then",
-
-              "  echo \"========================================\"",
-              "  echo \"ROLLBACK FAILED\"",
-              "  echo \"========================================\"",
-
-              "  exit 1",
-
-              "fi",
-
-              "echo \"========================================\"",
-              "echo \"ROLLBACK SUCCESSFUL\"",
-              "echo \"========================================\"",
-
-              "echo \"Application restored to: ${PREVIOUS_COMMIT}\"",
-
-              "exit 1",
-
-              "DEPLOY_SCRIPT"
-            ]' \
+            --comment "${APP_DISPLAY_NAME} ${GIT_BRANCH} deployment ${GITHUB_SHA}" \
+            --parameters "$(jq -n \
+              --arg script "${DEPLOY_SCRIPT}" \
+              '{commands: [$script]}')" \
             --query 'Command.CommandId' \
             --output text)
 
+
+          echo ""
           echo "SSM Command ID: ${COMMAND_ID}"
 
           echo "command_id=${COMMAND_ID}" >> "${GITHUB_OUTPUT}"
-
-
   # JOB 3: VERIFY
   verify:
     name: Verify all instances
@@ -334,7 +595,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # 2. Wait for every instance
+      # 2. Verify every instance
       - name: Verify deployment
         env:
           INSTANCE_IDS: ${{ needs.prepare.outputs.instance_ids }}
@@ -345,6 +606,9 @@ jobs:
           echo "========================================"
           echo "Waiting for deployment result"
           echo "========================================"
+
+          echo "Application: ${APP_DISPLAY_NAME}"
+          echo "Command ID: ${COMMAND_ID}"
 
           for INSTANCE_ID in ${INSTANCE_IDS}; do
 
@@ -361,7 +625,9 @@ jobs:
                 --query 'Status' \
                 --output text 2>/dev/null || echo "Pending")
 
+
               echo "${INSTANCE_ID}: ${STATUS}"
+
 
               case "${STATUS}" in
 
@@ -371,13 +637,16 @@ jobs:
                   break
                   ;;
 
+
                 Failed|Cancelled|TimedOut|Cancelling)
 
                   echo ""
                   echo "========================================"
                   echo "DEPLOYMENT FAILED"
-                  echo "Instance: ${INSTANCE_ID}"
                   echo "========================================"
+
+                  echo "Application: ${APP_DISPLAY_NAME}"
+                  echo "Instance: ${INSTANCE_ID}"
 
                   echo ""
                   echo "Deployment output:"
@@ -387,6 +656,7 @@ jobs:
                     --instance-id "${INSTANCE_ID}" \
                     --query 'StandardOutputContent' \
                     --output text || true
+
 
                   echo ""
                   echo "Error output:"
@@ -402,21 +672,26 @@ jobs:
 
               esac
 
+
               sleep 5
 
             done
+
 
             if [[ "${INSTANCE_SUCCESS}" != "true" ]]; then
 
               echo ""
               echo "========================================"
               echo "DEPLOYMENT TIMED OUT"
-              echo "Instance: ${INSTANCE_ID}"
               echo "========================================"
+
+              echo "Application: ${APP_DISPLAY_NAME}"
+              echo "Instance: ${INSTANCE_ID}"
 
               exit 1
 
             fi
+
 
             echo ""
             echo "Deployment successful on ${INSTANCE_ID}."
@@ -428,3 +703,6 @@ jobs:
           echo "========================================"
           echo "DEPLOYMENT SUCCESSFUL ON ALL INSTANCES"
           echo "========================================"
+
+          echo "Application: ${APP_DISPLAY_NAME}"
+          echo "Branch: ${GIT_BRANCH}"
