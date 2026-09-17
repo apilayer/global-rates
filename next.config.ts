@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  images: {
-    unoptimized: true,
-  },
+  basePath: '/devtools/global-rates',
+  assetPrefix: '/devtools/global-rates',
+  images: { unoptimized: true },
 };
 
 export default nextConfig;

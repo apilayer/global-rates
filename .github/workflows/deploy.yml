@@ -40,10 +40,12 @@ jobs:
       APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
       APP_ROOT: ${{ vars.APP_ROOT }}
       APP_PORT: ${{ vars.APP_PORT }}
+      APP_BASE_PATH: ${{ vars.APP_BASE_PATH }}
       ASG_NAME: ${{ vars.ASG_NAME }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       GIT_BRANCH: ${{ vars.GIT_BRANCH }}
       PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      REPO_URL: ${{ vars.REPO_URL }}
 
     outputs:
       instance_ids: ${{ steps.instances.outputs.instance_ids }}
@@ -70,7 +72,9 @@ jobs:
           echo "Application Root: ${APP_ROOT}"
           echo "PM2 Application: ${PM2_APP_NAME}"
           echo "Application Port: ${APP_PORT}"
+          echo "Application Base Path: ${APP_BASE_PATH}"
           echo "Git Branch: ${GIT_BRANCH}"
+          echo "Repo URL: ${REPO_URL}"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -118,10 +122,12 @@ jobs:
       APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
       APP_ROOT: ${{ vars.APP_ROOT }}
       APP_PORT: ${{ vars.APP_PORT }}
+      APP_BASE_PATH: ${{ vars.APP_BASE_PATH }}
       ASG_NAME: ${{ vars.ASG_NAME }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       GIT_BRANCH: ${{ vars.GIT_BRANCH }}
       PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      REPO_URL: ${{ vars.REPO_URL }}
 
     outputs:
       command_id: ${{ steps.deployment.outputs.command_id }}
@@ -146,6 +152,7 @@ jobs:
           echo "Application Root: ${APP_ROOT}"
           echo "PM2 Application: ${PM2_APP_NAME}"
           echo "Application Port: ${APP_PORT}"
+          echo "Application Base Path: ${APP_BASE_PATH}"
           echo "Git Branch: ${GIT_BRANCH}"
           echo ""
           echo "Target instances:"
@@ -159,8 +166,10 @@ jobs:
           APP_DISPLAY_NAME="${APP_DISPLAY_NAME}"
           APP_ROOT="${APP_ROOT}"
           APP_PORT="${APP_PORT}"
+          APP_BASE_PATH="${APP_BASE_PATH}"
           GIT_BRANCH="${GIT_BRANCH}"
           PM2_APP_NAME="${PM2_APP_NAME}"
+          REPO_URL="${REPO_URL}"
 
           NODE_MODULES_BACKUP="\${APP_ROOT}/node_modules_backup"
 
@@ -175,6 +184,23 @@ jobs:
           source "\${NVM_DIR}/nvm.sh"
           nvm use 20
 
+          FIRST_DEPLOY=false
+
+          if [[ ! -d "\${APP_ROOT}/.git" ]]; then
+            echo "Application directory not found or not a git repo at \${APP_ROOT}."
+            echo "Cloning \${GIT_BRANCH} from \${REPO_URL}..."
+
+            mkdir -p "\$(dirname "\${APP_ROOT}")"
+            rm -rf "\${APP_ROOT}"
+
+            if ! git clone --branch "\${GIT_BRANCH}" --single-branch "\${REPO_URL}" "\${APP_ROOT}"; then
+              echo "ERROR: git clone failed."
+              exit 1
+            fi
+
+            FIRST_DEPLOY=true
+          fi
+
           cd "\${APP_ROOT}" || {
             echo "ERROR: Application directory does not exist:"
             echo "\${APP_ROOT}"
@@ -188,6 +214,8 @@ jobs:
           echo "Git branch: \${GIT_BRANCH}"
           echo "PM2 application: \${PM2_APP_NAME}"
           echo "Application port: \${APP_PORT}"
+          echo "Application base path: \${APP_BASE_PATH}"
+          echo "First deploy: \${FIRST_DEPLOY}"
 
           echo ""
           echo "Saving current commit..."
@@ -269,7 +297,7 @@ jobs:
             HEALTH_OK=false
 
             for attempt in {1..30}; do
-              if curl --fail --silent --show-error "http://127.0.0.1:\${APP_PORT}/" > /dev/null; then
+              if curl --fail --silent --show-error "http://127.0.0.1:\${APP_PORT}\${APP_BASE_PATH}" > /dev/null; then
                 HEALTH_OK=true
                 break
               fi
@@ -295,6 +323,18 @@ jobs:
             echo "Keeping node_modules backup for rollback:"
             echo "\${NODE_MODULES_BACKUP}"
             exit 0
+          fi
+
+          if [[ "\${FIRST_DEPLOY}" == "true" ]]; then
+            echo ""
+            echo "========================================"
+            echo "DEPLOYMENT FAILED — NO ROLLBACK AVAILABLE"
+            echo "========================================"
+            echo "Application: \${APP_DISPLAY_NAME}"
+            echo "This was a first-time deploy on this instance (fresh clone)."
+            echo "There is no previous working version to roll back to."
+            echo "Manual investigation is required."
+            exit 1
           fi
 
           echo ""
@@ -354,7 +394,7 @@ jobs:
           ROLLBACK_HEALTH_OK=false
 
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error "http://127.0.0.1:\${APP_PORT}/" > /dev/null; then
+            if curl --fail --silent --show-error "http://127.0.0.1:\${APP_PORT}\${APP_BASE_PATH}" > /dev/null; then
               ROLLBACK_HEALTH_OK=true
               break
             fi
@@ -406,6 +446,7 @@ jobs:
     env:
       APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
       AWS_REGION: ${{ vars.AWS_REGION }}
+      APP_BASE_PATH: ${{ vars.APP_BASE_PATH }}
 
     steps:
       - name: Configure AWS credentials
