@@ -36,7 +36,7 @@ runs:
 
         echo '#!/usr/bin/env bash' > "${SCRIPT_FILE}"
 
-        for VAR in APP_DISPLAY_NAME APP_ROOT APP_PORT APP_BASE_PATH GIT_BRANCH PM2_APP_NAME REPO_URL; do
+        for VAR in APP_DISPLAY_NAME APP_ROOT APP_PORT APP_BASE_PATH APP_CONFIG_ROOT GIT_BRANCH PM2_APP_NAME REPO_URL; do
           if [[ -n "${!VAR+x}" ]]; then
             printf '%s=%q\n' "${VAR}" "${!VAR}" >> "${SCRIPT_FILE}"
           fi
