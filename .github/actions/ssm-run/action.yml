@@ -49,7 +49,7 @@ runs:
           APP_ROOT \
           APP_PORT \
           APP_BASE_PATH \
-          APP_CONFIG_PATH \
+          APP_CONFIG_ROOT \
           GIT_BRANCH \
           PM2_APP_NAME \
           REPO_URL
@@ -74,10 +74,13 @@ runs:
 
         DEPLOY_NAME="$(basename "${APP_ROOT}")"
 
-        STATE_FILE="/var/tmp/deploy-${DEPLOY_NAME}.state"
+        DEPLOY_STATE_ROOT="/var/tmp/deploy-${DEPLOY_NAME}"
+        STATE_FILE="${DEPLOY_STATE_ROOT}/state"
 
-        NODE_MODULES_BACKUP="${APP_ROOT}/node_modules_backup"
-        BUILD_BACKUP="${APP_ROOT}/.next_backup"
+        NODE_MODULES_BACKUP="${DEPLOY_STATE_ROOT}/node_modules_backup"
+        BUILD_BACKUP="${DEPLOY_STATE_ROOT}/next_backup"
+
+        mkdir -p "${DEPLOY_STATE_ROOT}"
 
         if [[ -f "${STATE_FILE}" ]]; then
           source "${STATE_FILE}"
@@ -128,6 +131,9 @@ runs:
 
             sleep 5
           done
+
+          echo ""
+          echo "Output from ${INSTANCE_ID}:"
 
           aws ssm get-command-invocation \
             --command-id "${COMMAND_ID}" \
