@@ -12,54 +12,23 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
-  APP_ROOT: ${{ vars.APP_ROOT }}
-  APP_PORT: ${{ vars.APP_PORT }}
-  APP_BASE_PATH: ${{ vars.APP_BASE_PATH }}
-  APP_CONFIG_PATH: ${{ vars.APP_CONFIG_PATH }}
-  ASG_NAME: ${{ vars.ASG_NAME }}
-  GIT_BRANCH: ${{ vars.GIT_BRANCH }}
-  PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
-  REPO_URL: ${{ vars.REPO_URL }}
 
 jobs:
 
   # ============================================================
-  # 1. RESOLVE ENVIRONMENT
-  # ============================================================
-
-  resolve:
-    name: Resolve deployment environment
-    runs-on: ubuntu-latest
-
-    outputs:
-      environment: ${{ steps.resolve.outputs.environment }}
-
-    steps:
-      - name: Resolve environment
-        id: resolve
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-            echo "environment=production" >> "${GITHUB_OUTPUT}"
-          else
-            echo "environment=staging" >> "${GITHUB_OUTPUT}"
-          fi
-
-
-  # ============================================================
-  # 2. PREPARE
+  # 1. PREPARE
   # ============================================================
 
   prepare:
     name: Prepare deployment
-    needs: resolve
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ needs.resolve.outputs.environment }}
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ASG_NAME: ${{ vars.ASG_NAME }}
 
     outputs:
       instance_ids: ${{ steps.instances.outputs.instance_ids }}
@@ -80,36 +49,49 @@ jobs:
 
           echo "ASG: ${ASG_NAME}"
 
-          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
-            --auto-scaling-group-names "${ASG_NAME}" \
-            --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService` && HealthStatus==`Healthy`].InstanceId' \
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters \
+              "Name=tag:aws:autoscaling:groupName,Values=${ASG_NAME}" \
+              "Name=instance-state-name,Values=running" \
+            --query 'Reservations[].Instances[].InstanceId' \
             --output text)
 
           if [[ -z "${INSTANCE_IDS}" || "${INSTANCE_IDS}" == "None" ]]; then
-            echo "ERROR: No healthy InService instances found"
+            echo "ERROR: No running EC2 instances found."
             exit 1
           fi
 
-          echo "Instances:"
+          echo ""
+          echo "Target instances:"
           echo "${INSTANCE_IDS}"
 
           echo "instance_ids=${INSTANCE_IDS}" >> "${GITHUB_OUTPUT}"
 
 
   # ============================================================
-  # 3. PREPARE SERVER
+  # 2. DEPLOY
   # ============================================================
 
-  server-prepare:
-    name: Prepare server
-    needs:
-      - resolve
-      - prepare
-
+  deploy:
+    name: Deploy application
+    needs: prepare
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ needs.resolve.outputs.environment }}
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+
+      APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
+      APP_ROOT: ${{ vars.APP_ROOT }}
+      APP_PORT: ${{ vars.APP_PORT }}
+      APP_BASE_PATH: ${{ vars.APP_BASE_PATH }}
+      APP_CONFIG_PATH: ${{ vars.APP_CONFIG_PATH }}
+
+      GIT_BRANCH: ${{ vars.GIT_BRANCH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      REPO_URL: ${{ vars.REPO_URL }}
 
     steps:
 
@@ -119,22 +101,52 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Prepare deployment
+
+      # --------------------------------------------------------
+      # COMPLETE DEPLOYMENT
+      # --------------------------------------------------------
+
+      - name: Deploy
         uses: ./.github/actions/ssm-run
         with:
-          phase: "Prepare server"
+          phase: "Deploy ${APP_DISPLAY_NAME}"
           instance-ids: ${{ needs.prepare.outputs.instance_ids }}
+          timeout: "1800"
+
           script: |
             set -euo pipefail
 
-            echo "Application: ${APP_DISPLAY_NAME}"
-            echo "Application root: ${APP_ROOT}"
-            echo "Config path: ${APP_CONFIG_PATH}"
+            echo "========================================"
+            echo "DEPLOYMENT"
+            echo "========================================"
+
+            echo "Application : ${APP_DISPLAY_NAME}"
+            echo "Root        : ${APP_ROOT}"
+            echo "Branch      : ${GIT_BRANCH}"
+            echo "Config      : ${APP_CONFIG_PATH}"
+            echo "Repository  : ${REPO_URL}"
 
             mkdir -p "${APP_ROOT}"
 
+            DEPLOY_NAME="$(basename "${APP_ROOT}")"
+
+            DEPLOY_STATE_ROOT="/var/tmp/deploy-${DEPLOY_NAME}"
+            STATE_FILE="${DEPLOY_STATE_ROOT}/state"
+
+            NODE_MODULES_BACKUP="${DEPLOY_STATE_ROOT}/node_modules_backup"
+            BUILD_BACKUP="${DEPLOY_STATE_ROOT}/next_backup"
+
+            mkdir -p "${DEPLOY_STATE_ROOT}"
+
+            # ==================================================
+            # 1. CHECK / CLONE REPOSITORY
+            # ==================================================
+
             if [[ ! -d "${APP_ROOT}/.git" ]]; then
-              echo "Git repository does not exist yet."
+
+              echo ""
+              echo "Git repository does not exist."
+              echo "Cloning ${GIT_BRANCH}..."
 
               rm -rf "${APP_ROOT}"
 
@@ -144,16 +156,46 @@ jobs:
                 "${APP_ROOT}"
 
               FIRST_DEPLOY=true
+              PREVIOUS_COMMIT="NONE"
 
             else
-              echo "Existing Git repository detected."
 
               FIRST_DEPLOY=false
+
+              cd "${APP_ROOT}"
+
+              PREVIOUS_COMMIT=$(git rev-parse HEAD)
+
+              echo ""
+              echo "Current commit:"
+              echo "${PREVIOUS_COMMIT}"
+
             fi
 
-            echo "FIRST_DEPLOY=${FIRST_DEPLOY}" > "${STATE_FILE}"
+
+            # ==================================================
+            # 2. SAVE DEPLOYMENT STATE
+            # ==================================================
+
+            cat > "${STATE_FILE}" <<EOF
+            FIRST_DEPLOY="${FIRST_DEPLOY}"
+            PREVIOUS_COMMIT="${PREVIOUS_COMMIT}"
+            APP_ROOT="${APP_ROOT}"
+            APP_CONFIG_PATH="${APP_CONFIG_PATH}"
+            GIT_BRANCH="${GIT_BRANCH}"
+            PM2_APP_NAME="${PM2_APP_NAME}"
+            APP_PORT="${APP_PORT}"
+            REPO_URL="${REPO_URL}"
+            EOF
+
+
+            # ==================================================
+            # 3. BACKUP CURRENT NODE_MODULES
+            # ==================================================
 
             if [[ -d "${APP_ROOT}/node_modules" ]]; then
+
+              echo ""
               echo "Backing up node_modules..."
 
               rm -rf "${NODE_MODULES_BACKUP}"
@@ -161,287 +203,162 @@ jobs:
               mv \
                 "${APP_ROOT}/node_modules" \
                 "${NODE_MODULES_BACKUP}"
+
+            else
+
+              echo ""
+              echo "No node_modules directory found."
+
             fi
 
+
+            # ==================================================
+            # 4. BACKUP CURRENT NEXT BUILD
+            # ==================================================
+
             if [[ -d "${APP_ROOT}/.next" ]]; then
-              echo "Backing up .next build..."
+
+              echo ""
+              echo "Backing up .next..."
 
               rm -rf "${BUILD_BACKUP}"
 
               mv \
                 "${APP_ROOT}/.next" \
                 "${BUILD_BACKUP}"
+
+            else
+
+              echo ""
+              echo "No .next directory found."
+
             fi
 
 
-  # ============================================================
-  # 4. SYNC GIT
-  # ============================================================
-
-  pull:
-    name: Sync latest GitHub code
-    needs:
-      - resolve
-      - prepare
-      - server-prepare
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Sync Git repository
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Sync latest GitHub code"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          script: |
-            set -euo pipefail
+            # ==================================================
+            # 5. SYNC EXACTLY WITH GITHUB
+            # ==================================================
 
             cd "${APP_ROOT}"
 
-            echo "Repository: ${REPO_URL}"
-            echo "Branch: ${GIT_BRANCH}"
-
-            CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "NONE")
-
-            echo "Current commit:"
-            echo "${CURRENT_COMMIT}"
-
-            echo "Updating origin URL..."
+            echo ""
+            echo "========================================"
+            echo "SYNCING GITHUB"
+            echo "========================================"
 
             git remote set-url origin "${REPO_URL}"
 
-            echo "Fetching latest GitHub branch..."
+            echo "Fetching latest ${GIT_BRANCH}..."
 
             git fetch origin "${GIT_BRANCH}"
 
-            echo "Resetting repository to origin/${GIT_BRANCH}..."
+            echo ""
+            echo "Resetting to origin/${GIT_BRANCH}..."
 
             git reset --hard "origin/${GIT_BRANCH}"
 
+            echo ""
             echo "Removing untracked files..."
 
-            git clean -fd \
-              -e node_modules_backup \
-              -e .next_backup
+            git clean -fd
 
-            NEW_COMMIT=$(git rev-parse HEAD)
+            echo ""
+            echo "Repository is now synchronized."
 
-            echo "Previous commit:"
-            echo "${CURRENT_COMMIT}"
+            DEPLOY_COMMIT=$(git rev-parse HEAD)
 
-            echo "New commit:"
-            echo "${NEW_COMMIT}"
+            echo ""
+            echo "Deploy commit:"
+            echo "${DEPLOY_COMMIT}"
 
             cat >> "${STATE_FILE}" <<EOF
-            PREVIOUS_COMMIT="${CURRENT_COMMIT}"
-            DEPLOY_COMMIT="${NEW_COMMIT}"
+            DEPLOY_COMMIT="${DEPLOY_COMMIT}"
             EOF
 
-            echo "Git repository is now exactly synchronized with GitHub."
 
+            # ==================================================
+            # 6. RESTORE SERVER-SPECIFIC CONFIG
+            # ==================================================
 
-  # ============================================================
-  # 5. RESTORE SERVER CONFIG
-  # ============================================================
-
-  restore-config:
-    name: Restore application config
-    needs:
-      - resolve
-      - prepare
-      - pull
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Restore config
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Restore application config"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          script: |
-            set -euo pipefail
-
-            echo "Config source:"
-            echo "${APP_CONFIG_PATH}"
+            echo ""
+            echo "========================================"
+            echo "RESTORING APPLICATION CONFIG"
+            echo "========================================"
 
             if [[ ! -d "${APP_CONFIG_PATH}" ]]; then
+
               echo "ERROR: Application config directory does not exist:"
               echo "${APP_CONFIG_PATH}"
-              exit 1
-            fi
 
-            echo "Restoring server-specific application files..."
+              exit 1
+
+            fi
 
             cp -a \
               "${APP_CONFIG_PATH}/." \
               "${APP_ROOT}/"
 
-            echo "Restored files:"
+            echo ""
+            echo "Application-specific files restored."
+
+            echo ""
+            echo "Config files:"
 
             find "${APP_CONFIG_PATH}" \
               -type f \
               -print
 
-            echo "Application config restored successfully."
 
-
-  # ============================================================
-  # 6. INSTALL DEPENDENCIES
-  # ============================================================
-
-  install:
-    name: Install dependencies
-    needs:
-      - resolve
-      - prepare
-      - restore-config
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Install dependencies
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Install dependencies"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          script: |
-            set -euo pipefail
+            # ==================================================
+            # 7. INSTALL DEPENDENCIES
+            # ==================================================
 
             cd "${APP_ROOT}"
 
-            echo "Node version:"
+            echo ""
+            echo "========================================"
+            echo "INSTALLING DEPENDENCIES"
+            echo "========================================"
+
+            echo "Node:"
             node --version
 
-            echo "npm version:"
+            echo "npm:"
             npm --version
-
-            echo "Installing dependencies..."
 
             npm ci
 
-            echo "npm ci completed successfully."
 
+            # ==================================================
+            # 8. BUILD
+            # ==================================================
 
-  # ============================================================
-  # 7. BUILD
-  # ============================================================
-
-  build:
-    name: Build application
-    needs:
-      - resolve
-      - prepare
-      - install
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Build application
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Build application"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          timeout: "1200"
-          script: |
-            set -euo pipefail
-
-            cd "${APP_ROOT}"
-
-            echo "Starting production build..."
+            echo ""
+            echo "========================================"
+            echo "BUILDING APPLICATION"
+            echo "========================================"
 
             npm run build
 
-            echo "Build completed successfully."
 
+            # ==================================================
+            # 9. RESTART PM2
+            # ==================================================
 
-  # ============================================================
-  # 8. RESTART PM2
-  # ============================================================
-
-  restart:
-    name: Restart application
-    needs:
-      - resolve
-      - prepare
-      - build
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Restart PM2
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Restart application"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          script: |
-            set -euo pipefail
-
-            cd "${APP_ROOT}"
-
-            echo "Checking existing PM2 application..."
+            echo ""
+            echo "========================================"
+            echo "RESTARTING PM2"
+            echo "========================================"
 
             if pm2 describe "${PM2_APP_NAME}" >/dev/null 2>&1; then
 
-              echo "Reloading existing PM2 application..."
+              echo "Existing PM2 process found."
 
               pm2 reload "${PM2_APP_NAME}" --update-env
 
             else
 
-              echo "PM2 application does not exist."
-
-              echo "Starting application..."
+              echo "PM2 process does not exist."
 
               pm2 start npm \
                 --name "${PM2_APP_NAME}" \
@@ -452,54 +369,28 @@ jobs:
 
             pm2 save
 
-            echo "PM2 status:"
-
             pm2 status
 
 
-  # ============================================================
-  # 9. HEALTH CHECK
-  # ============================================================
+            # ==================================================
+            # 10. HEALTH CHECK
+            # ==================================================
 
-  health:
-    name: Health check
-    needs:
-      - resolve
-      - prepare
-      - restart
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Health check
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Health check"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          timeout: "180"
-          script: |
-            set -euo pipefail
+            echo ""
+            echo "========================================"
+            echo "HEALTH CHECK"
+            echo "========================================"
 
             HEALTH_URL="http://127.0.0.1:${APP_PORT}/"
 
             echo "Health URL:"
             echo "${HEALTH_URL}"
 
-            SUCCESS=false
+            HEALTHY=false
 
             for i in {1..30}; do
 
-              echo "Health check attempt ${i}/30..."
+              echo "Health check ${i}/30..."
 
               if curl \
                 --fail \
@@ -508,7 +399,7 @@ jobs:
                 "${HEALTH_URL}" \
                 >/dev/null; then
 
-                SUCCESS=true
+                HEALTHY=true
                 break
 
               fi
@@ -517,85 +408,75 @@ jobs:
 
             done
 
-            if [[ "${SUCCESS}" != "true" ]]; then
-              echo "ERROR: Application health check failed."
+            if [[ "${HEALTHY}" != "true" ]]; then
+
+              echo ""
+              echo "ERROR: Health check failed."
+
+              echo ""
+              echo "PM2 status:"
 
               pm2 status || true
-              pm2 logs "${PM2_APP_NAME}" --lines 100 --nostream || true
+
+              echo ""
+              echo "PM2 logs:"
+
+              pm2 logs \
+                "${PM2_APP_NAME}" \
+                --lines 100 \
+                --nostream || true
 
               exit 1
+
             fi
 
-            echo "Application is healthy."
+            echo ""
+            echo "Health check passed."
 
 
-  # ============================================================
-  # 10. CLEAN BACKUPS AFTER SUCCESS
-  # ============================================================
+            # ==================================================
+            # 11. CLEAN OLD BACKUPS
+            # ==================================================
 
-  cleanup:
-    name: Cleanup deployment backups
-    needs:
-      - resolve
-      - prepare
-      - health
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: ${{ needs.resolve.outputs.environment }}
-
-    steps:
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-
-      - name: Cleanup backups
-        uses: ./.github/actions/ssm-run
-        with:
-          phase: "Cleanup deployment backups"
-          instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          script: |
-            set -euo pipefail
-
-            echo "Deployment successful."
-
-            echo "Removing old node_modules backup..."
+            echo ""
+            echo "========================================"
+            echo "CLEANUP"
+            echo "========================================"
 
             rm -rf "${NODE_MODULES_BACKUP}"
-
-            echo "Removing old .next backup..."
-
             rm -rf "${BUILD_BACKUP}"
 
-            echo "Backups cleaned."
+            echo "Deployment completed successfully."
 
 
   # ============================================================
-  # 11. ROLLBACK
+  # 3. ROLLBACK
   # ============================================================
 
   rollback:
     name: Rollback deployment
     needs:
-      - resolve
       - prepare
-      - pull
-      - restore-config
-      - install
-      - build
-      - restart
-      - health
+      - deploy
 
-    if: ${{ failure() }}
+    if: ${{ needs.deploy.result == 'failure' }}
 
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ needs.resolve.outputs.environment }}
+      name: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+
+      APP_DISPLAY_NAME: ${{ vars.APP_DISPLAY_NAME }}
+      APP_ROOT: ${{ vars.APP_ROOT }}
+      APP_PORT: ${{ vars.APP_PORT }}
+      APP_CONFIG_PATH: ${{ vars.APP_CONFIG_PATH }}
+
+      GIT_BRANCH: ${{ vars.GIT_BRANCH }}
+      PM2_APP_NAME: ${{ vars.PM2_APP_NAME }}
+      REPO_URL: ${{ vars.REPO_URL }}
 
     steps:
 
@@ -605,39 +486,73 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Rollback application
+      - name: Rollback
         uses: ./.github/actions/ssm-run
         with:
-          phase: "Rollback deployment"
+          phase: "Rollback ${APP_DISPLAY_NAME}"
           instance-ids: ${{ needs.prepare.outputs.instance_ids }}
-          timeout: "600"
+          timeout: "900"
+
           script: |
             set -euo pipefail
-
-            cd "${APP_ROOT}"
 
             echo "========================================"
             echo "ROLLBACK"
             echo "========================================"
 
-            if [[ "${FIRST_DEPLOY:-false}" == "true" ]]; then
+            DEPLOY_NAME="$(basename "${APP_ROOT}")"
 
-              echo "This was the first deployment."
+            DEPLOY_STATE_ROOT="/var/tmp/deploy-${DEPLOY_NAME}"
+            STATE_FILE="${DEPLOY_STATE_ROOT}/state"
 
-              echo "No previous application version is available."
+            NODE_MODULES_BACKUP="${DEPLOY_STATE_ROOT}/node_modules_backup"
+            BUILD_BACKUP="${DEPLOY_STATE_ROOT}/next_backup"
+
+            if [[ ! -f "${STATE_FILE}" ]]; then
+
+              echo "ERROR: Deployment state was not found:"
+              echo "${STATE_FILE}"
 
               exit 1
+
             fi
+
+            source "${STATE_FILE}"
+
+            echo "Previous commit:"
+            echo "${PREVIOUS_COMMIT:-NONE}"
+
+
+            # ==================================================
+            # FIRST DEPLOYMENT
+            # ==================================================
+
+            if [[ "${FIRST_DEPLOY:-false}" == "true" ]]; then
+
+              echo ""
+              echo "This was the first deployment."
+              echo "There is no previous version to restore."
+
+              exit 1
+
+            fi
+
 
             if [[ -z "${PREVIOUS_COMMIT:-}" || "${PREVIOUS_COMMIT}" == "NONE" ]]; then
 
-              echo "ERROR: Previous commit is not available."
+              echo "ERROR: Previous commit is unavailable."
 
               exit 1
+
             fi
 
-            echo "Rolling back to:"
-            echo "${PREVIOUS_COMMIT}"
+
+            cd "${APP_ROOT}"
+
+
+            # ==================================================
+            # 1. RESTORE PREVIOUS GIT VERSION
+            # ==================================================
 
             echo ""
             echo "Restoring previous Git commit..."
@@ -646,16 +561,19 @@ jobs:
 
             git reset --hard "${PREVIOUS_COMMIT}"
 
-            git clean -fd \
-              -e node_modules_backup \
-              -e .next_backup
+            git clean -fd
+
+
+            # ==================================================
+            # 2. RESTORE NODE_MODULES
+            # ==================================================
 
             echo ""
             echo "Restoring previous node_modules..."
 
-            if [[ -d "${NODE_MODULES_BACKUP}" ]]; then
+            rm -rf "${APP_ROOT}/node_modules"
 
-              rm -rf "${APP_ROOT}/node_modules"
+            if [[ -d "${NODE_MODULES_BACKUP}" ]]; then
 
               mv \
                 "${NODE_MODULES_BACKUP}" \
@@ -667,12 +585,17 @@ jobs:
 
             fi
 
+
+            # ==================================================
+            # 3. RESTORE PREVIOUS BUILD
+            # ==================================================
+
             echo ""
-            echo "Restoring previous .next build..."
+            echo "Restoring previous .next..."
+
+            rm -rf "${APP_ROOT}/.next"
 
             if [[ -d "${BUILD_BACKUP}" ]]; then
-
-              rm -rf "${APP_ROOT}/.next"
 
               mv \
                 "${BUILD_BACKUP}" \
@@ -684,8 +607,13 @@ jobs:
 
             fi
 
+
+            # ==================================================
+            # 4. RESTORE SERVER CONFIG
+            # ==================================================
+
             echo ""
-            echo "Restoring server-specific config..."
+            echo "Restoring application-specific config..."
 
             if [[ -d "${APP_CONFIG_PATH}" ]]; then
 
@@ -693,10 +621,19 @@ jobs:
                 "${APP_CONFIG_PATH}/." \
                 "${APP_ROOT}/"
 
+            else
+
+              echo "WARNING: Application config path not found."
+
             fi
 
+
+            # ==================================================
+            # 5. RESTART PM2
+            # ==================================================
+
             echo ""
-            echo "Restarting previous version..."
+            echo "Restarting PM2..."
 
             if pm2 describe "${PM2_APP_NAME}" >/dev/null 2>&1; then
 
@@ -713,14 +650,21 @@ jobs:
 
             pm2 save
 
+
+            # ==================================================
+            # 6. ROLLBACK HEALTH CHECK
+            # ==================================================
+
             echo ""
             echo "Checking rollback health..."
 
             HEALTH_URL="http://127.0.0.1:${APP_PORT}/"
 
-            SUCCESS=false
+            HEALTHY=false
 
             for i in {1..30}; do
+
+              echo "Rollback health check ${i}/30..."
 
               if curl \
                 --fail \
@@ -729,7 +673,7 @@ jobs:
                 "${HEALTH_URL}" \
                 >/dev/null; then
 
-                SUCCESS=true
+                HEALTHY=true
                 break
 
               fi
@@ -738,15 +682,23 @@ jobs:
 
             done
 
-            if [[ "${SUCCESS}" != "true" ]]; then
+            if [[ "${HEALTHY}" != "true" ]]; then
 
+              echo ""
               echo "ERROR: Rollback health check failed."
 
               pm2 status || true
-              pm2 logs "${PM2_APP_NAME}" --lines 100 --nostream || true
+
+              pm2 logs \
+                "${PM2_APP_NAME}" \
+                --lines 100 \
+                --nostream || true
 
               exit 1
+
             fi
 
             echo ""
-            echo "Rollback completed successfully."
+            echo "========================================"
+            echo "ROLLBACK COMPLETED"
+            echo "========================================"
