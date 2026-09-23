@@ -1,5 +1,4 @@
 name: Application CI/CD
-
 on:
   push:
     branches:
