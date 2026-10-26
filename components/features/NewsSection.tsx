@@ -147,7 +147,7 @@ export const NewsSection: FC<INewsSectionProps> = ({
                 href={featured.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group flex flex-col overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface) shadow-sm transition-all hover:border-(--color-brand)/30 hover:bg-(--color-surface-2)"
+                className="group flex flex-col overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface) transition-all hover:border-(--color-brand)/30 hover:bg-(--color-surface-2)"
               >
                 <ArticleThumb
                   image={featured.image}

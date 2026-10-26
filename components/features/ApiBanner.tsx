@@ -34,7 +34,7 @@ export const ApiBanner: FC = () => {
           href="http://exchangeratesapi.io/"
           target="_blank"
           rel="noopener noreferrer"
-          className="group relative block w-full select-none overflow-hidden rounded-xl border border-(--color-brand)/30 shadow-2xl transition hover:border-(--color-brand)/70"
+          className="group relative block w-full select-none overflow-hidden rounded-xl border border-(--color-brand)/30 transition hover:border-(--color-brand)/70"
         >
           {/* Dimmed markets photo backdrop (falls back to the gradient if it fails to load) */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -78,7 +78,7 @@ export const ApiBanner: FC = () => {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end">
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-(--color-brand) px-4 py-2.5 text-sm font-bold text-white shadow-lg shadow-(--color-brand)/25 transition group-hover:bg-(--color-brand-hover)">
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-(--color-brand) px-4 py-2.5 text-sm font-bold text-white shadow-(--color-brand)/25 transition group-hover:bg-(--color-brand-hover)">
                 Get Your API Key
                 <span className="transition-transform group-hover:translate-x-0.5">
                   →

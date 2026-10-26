@@ -1,0 +1,82 @@
+# GlobalRates - free currency converter and live exchange rates
+
+> A free tool that converts an amount between 170+ world currencies at live
+> mid-market rates, charts how a rate has moved over time, and compares what
+> money transfer providers actually pay out. Powered by the Exchangerates API
+> from APILayer.
+
+## What it answers
+
+- **What is the exchange rate today?** Live mid-market rates for 170+
+  currencies and precious metals.
+- **How much is X in Y?** Enter an amount and both currencies; your home
+  currency is detected automatically.
+- **How has this rate moved?** Historical charts and fluctuation over a chosen
+  date range.
+- **What will I actually receive?** The mid-market rate is not what a provider
+  pays out. The comparison view shows the real payout side by side.
+
+## Mid-market rate vs what you get
+
+The mid-market rate is the midpoint between the buy and sell price of a
+currency pair, and it is the number quoted almost everywhere. It is not what
+you are paid. Providers take a margin on the rate, sometimes alongside a fixed
+fee, so two services quoting "no fees" can still pay out very different
+amounts. Comparing payouts rather than advertised rates is the only reliable
+way to tell them apart.
+
+## Data sources
+
+- Exchangerates API (https://exchangeratesapi.io), an APILayer product, for
+  live rates, conversion, historical time-series and fluctuation.
+- ipstack (https://ipstack.com) to detect your country so the home currency is
+  preselected.
+- Mediastack (https://mediastack.com) for the currency news shown per pair.
+
+All three are APILayer products with free tiers.
+
+## Limits
+
+- Rates are indicative mid-market figures, not a dealable quote.
+- Provider payouts change through the day and by amount and corridor.
+- Nothing here is financial advice.
+
+## Frequently asked questions
+
+### What is GlobalRates?
+
+GlobalRates is a free currency converter and exchange rate tool that converts an amount from one currency into another and shows how that rate has moved over time. It supports live conversion, historical rate charts, currency fluctuation, and side-by-side comparison of what money transfer providers actually pay out. GlobalRates is powered by Exchangerates API.
+
+### What is the data source for GlobalRates?
+
+GlobalRates is powered by Exchangerates API, a foreign exchange rate API from APILayer. Exchangerates API provides the live rates, currency conversion, historical time-series, and fluctuation data used throughout the tool. Two APILayer services support the experience around it: ipstack detects your country so your home currency is selected automatically, and Mediastack supplies the currency news shown for each pair.
+
+### How do I convert one currency into another?
+
+Enter an amount in the converter, choose the currency you are converting from and the currency you are converting to, and GlobalRates returns the converted amount at the latest available mid-market rate. Developers can perform the same conversion programmatically using the Exchangerates API convert endpoint.
+
+### What is a currency exchange rate?
+
+A currency exchange rate is how much one currency is worth when expressed in another. A USD/EUR rate of 0.92 means one US dollar is worth 0.92 euros. The rates shown on GlobalRates are mid-market rates — the midpoint between the buy and sell price — which is the rate banks and transfer providers start from before adding their own margin.
+
+### What are historical exchange rates?
+
+Historical exchange rates are the rates that applied on past dates rather than right now. Exchangerates API supports historical data through its time-series and fluctuation endpoints, letting developers request a date range and retrieve how a currency pair moved across it. GlobalRates uses this to draw its rate charts and to show whether a pair has strengthened or weakened over the period.
+
+### What is Exchangerates API?
+
+Exchangerates API is a real-time and historical foreign exchange rate API that lets developers retrieve live rates, convert between currencies, and pull historical FX data. It covers currencies worldwide and supports current rates, currency conversion, time-series data, fluctuation data, and a full list of supported currency symbols.
+
+### How can I use Exchangerates API for currency conversion?
+
+Send a source currency, a target currency, and an amount to the Exchangerates API convert endpoint to receive the converted value along with the rate used. For live rates without conversion, request the latest endpoint with a base currency. For historical analysis, request a date range from the time-series or fluctuation endpoints. Exchangerates API returns structured JSON that can be integrated into websites, mobile apps, and backend services.
+
+### What can I build with an exchange rate API like Exchangerates API?
+
+Exchangerates API can be used to build currency converters, international pricing and checkout flows, invoicing and accounting tools, travel and remittance apps, financial dashboards, rate alerting services, and analytics tools that track currency trends. Any application that needs to price, report, or compare across currencies can use it as its exchange rate source.
+
+## Links
+
+- Tool: https://apilayer.com/devtools/globalrates
+- Exchangerates API: https://exchangeratesapi.io
+- APILayer: https://apilayer.com

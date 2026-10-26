@@ -70,7 +70,7 @@ export default function ComparePage() {
               <p className="text-xs font-semibold uppercase tracking-widest text-(--color-brand)">
                 Forex comparison
               </p>
-              <h1 className="mt-2 max-w-3xl text-3xl font-bold leading-tight tracking-tight text-(--color-text) sm:text-4xl">
+              <h1 className="mt-2 max-w-3xl text-[2rem] font-semibold leading-[1.24] tracking-tight text-(--color-text) md:text-[2.8125rem] md:leading-[3.5rem]">
                 Compare forex &amp; money-transfer rates
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-(--color-text-muted) sm:text-base">
@@ -80,7 +80,7 @@ export default function ComparePage() {
               </p>
 
               {/* Input card */}
-              <div className="mt-6 rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 shadow-xl shadow-black/20 sm:p-5">
+              <div className="mt-6 rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 sm:p-5">
                 <div className="grid gap-3 sm:grid-cols-[1.4fr_auto_1fr_auto_1fr]">
                   <label className="flex flex-col gap-1">
                     <span className="text-[11px] font-semibold uppercase tracking-wider text-(--color-text-muted)">

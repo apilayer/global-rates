@@ -77,7 +77,7 @@ const TableBlock: FC<ITableBlockProps> = ({
   onSelectAmount,
 }) => {
   return (
-    <div className="rounded-xl border border-(--color-border) bg-(--color-surface) p-3 shadow-sm">
+    <div className="rounded-xl border border-(--color-border) bg-(--color-surface) p-3">
       <h3 className="mb-2 text-xs font-semibold tracking-wider text-(--color-text-dim) uppercase">
         Convert {fromName} to {toName}
       </h3>

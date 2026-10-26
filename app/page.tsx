@@ -132,7 +132,6 @@ export default function Home() {
           {/* Hero — WorldRemit-style converter lead */}
           <section id="top" className="relative -mx-4 scroll-mt-28 overflow-hidden rounded-none border-b border-(--color-border) px-8 pb-8 pt-4 sm:-mx-6 sm:rounded-2xl sm:border sm:px-12 sm:pb-9 sm:pt-8">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--color-brand)/16,_transparent_55%)]" />
-            <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-(--color-brand)/10 blur-3xl" />
 
             <div className="relative grid items-center gap-8 lg:grid-cols-[1.1fr_minmax(380px,440px)] lg:gap-12">
               {/* Left — heading + copy */}
@@ -143,7 +142,7 @@ export default function Home() {
                   <span className="text-(--color-text)">{from} → {to}</span>
                 </div>
 
-                <h1 className="mt-3 text-3xl font-bold leading-tight tracking-tight text-(--color-text) sm:text-4xl lg:text-5xl">
+                <h1 className="mt-3 text-[2rem] font-semibold leading-[1.24] tracking-tight text-(--color-text) md:text-[2.8125rem] md:leading-[3.5rem]">
                   Convert {CURRENCIES[from]?.name ?? from} to{" "}
                   {CURRENCIES[to]?.name ?? to}
                 </h1>

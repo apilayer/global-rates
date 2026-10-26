@@ -2,7 +2,6 @@
 
 import { FC } from "react";
 import Link from "next/link";
-import { ThemeToggle } from "./ThemeToggle";
 import { ApiLayerLogo } from "@/components/ui/ApiLayerLogo";
 
 const navItems: { label: string; href: string; external?: boolean }[] = [
@@ -106,7 +105,6 @@ export const Header: FC = () => {
           >
             Get API key
           </a>
-          <ThemeToggle />
         </div>
       </div>
     </header>

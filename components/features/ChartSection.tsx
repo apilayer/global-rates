@@ -70,7 +70,7 @@ export const ChartSection: FC<IChartSectionProps> = ({ from, to, rate }) => {
   return (
     <section className="w-full">
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6">
-        <div className="rounded-xl border border-(--color-border) bg-(--color-surface) p-4 shadow-sm md:p-6">
+        <div className="rounded-xl border border-(--color-border) bg-(--color-surface) p-4 md:p-6">
           <div className="mb-4 flex flex-col justify-between gap-2 md:mb-6 md:flex-row md:items-center">
             <div>
               <h3 className="text-lg font-semibold text-(--color-text) md:text-xl">
@@ -81,7 +81,7 @@ export const ChartSection: FC<IChartSectionProps> = ({ from, to, rate }) => {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="rounded-md bg-(--color-brand) px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-(--color-brand)/20 transition-colors hover:bg-(--color-brand-hover)">
+              <button className="rounded-md bg-(--color-brand) px-3 py-1.5 text-xs font-semibold text-white shadow-(--color-brand)/20 transition-colors hover:bg-(--color-brand-hover)">
                 Track rate
               </button>
               <a

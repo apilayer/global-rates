@@ -53,13 +53,12 @@ export const ConverterWidget: FC<IConverterWidgetProps> = ({
   return (
     <div
       className={cn(
-        "relative rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 shadow-2xl shadow-black/20 sm:p-5",
+        "relative rounded-2xl border border-(--color-border) bg-(--color-surface) p-4 sm:p-5",
         className
       )}
     >
       {/* Clip the decorative glow without clipping the currency dropdown */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
-        <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-(--color-brand)/10 blur-3xl" />
       </div>
 
       <div className="relative">
@@ -144,7 +143,7 @@ export const ConverterWidget: FC<IConverterWidgetProps> = ({
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <a
             href="#charts"
-            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-(--color-brand) px-6 text-sm font-semibold text-white shadow-lg shadow-(--color-brand)/20 transition-all hover:bg-(--color-brand-hover)"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-(--color-brand) px-6 text-sm font-semibold text-white shadow-(--color-brand)/20 transition-all hover:bg-(--color-brand-hover)"
           >
             View rate charts
             <span aria-hidden="true">→</span>

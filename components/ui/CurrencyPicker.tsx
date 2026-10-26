@@ -79,7 +79,7 @@ export const CurrencyPicker: FC<ICurrencyPickerProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-(--color-border-strong) bg-(--color-surface-2) shadow-2xl shadow-black/30">
+        <div className="absolute right-0 z-30 mt-2 w-72 rounded-xl border border-(--color-border-strong) bg-(--color-surface-2)">
           <div className="border-b border-(--color-border) p-2">
             <input
               type="text"

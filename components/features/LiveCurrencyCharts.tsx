@@ -70,13 +70,12 @@ export const LiveCurrencyCharts: FC<ILiveCurrencyChartsProps> = ({
                 type="button"
                 onClick={() => onSelectPair?.(from, pair.to)}
                 aria-pressed={isActive}
-                className={`group relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-(--color-surface) p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:shadow-md hover:shadow-(--color-brand)/5 ${
+                className={`group relative flex flex-col gap-3 overflow-hidden rounded-xl border bg-(--color-surface) p-4 text-left transition-all hover:-translate-y-0.5 hover:border-(--color-brand)/30 hover:bg-(--color-surface-2) hover:hover:shadow-(--color-brand)/5 ${
                   isActive
                     ? "border-(--color-brand) ring-1 ring-(--color-brand)/40"
                     : "border-(--color-border)"
                 }`}
               >
-                <div className="pointer-events-none absolute -right-6 -top-6 h-20 w-20 rounded-full bg-(--color-brand)/5 blur-2xl opacity-0 transition-opacity group-hover:opacity-100" />
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{meta?.flag}</span>
                   <span className="text-sm font-semibold text-(--color-text)">
